@@ -1,0 +1,3317 @@
+    const STORAGE_KEY = "ada-2026-simplified-therapy-app-v1";
+
+    const DRUG_DATA = await loadDrugData().catch((error) => {
+      showInitializationError(error);
+      throw error;
+    });
+
+    const PATIENT_DATA = await loadPatientData().catch((error) => {
+      showInitializationError(error);
+      throw error;
+    });
+
+    const CLASS_META = {
+      metformin: {
+        label: "Metformin",
+        description: "Foundational low-cost oral option when glycemia is above target and the profile allows it."
+      },
+      SGLT2i: {
+        label: "SGLT2 inhibitor",
+        description: "Oral class with strong cardiorenal value and modest weight loss."
+      },
+      GLP1_RA: {
+        label: "GLP-1 RA",
+        description: "Injectable class often favored for ASCVD and weight support."
+      },
+      dual_GIP_GLP1_RA: {
+        label: "Dual GIP/GLP-1 RA",
+        description: "High-potency injectable option for larger A1C and weight reduction."
+      },
+      DPP4i: {
+        label: "DPP-4 inhibitor",
+        description: "Oral, weight-neutral, lower-potency fallback in this simplified model."
+      },
+      sulfonylurea: {
+        label: "Sulfonylurea",
+        description: "Lower-cost oral option with stronger glycemic effect, but more hypoglycemia and weight-gain risk."
+      },
+      pioglitazone: {
+        label: "Pioglitazone",
+        description: "Lower-cost oral alternative that may surface when cost matters or MASLD logic fires."
+      },
+      basal_insulin: {
+        label: "Basal insulin",
+        description: "Fast potency for severe hyperglycemia, but carries higher hypoglycemia and weight burden."
+      }
+    };
+
+    const FORM_SECTIONS = [
+      {
+        title: "Scope and Glycemia",
+        description: "Start with diabetes type, A1C, and whether the presentation looks severe.",
+        open: true,
+        fields: [
+          {
+            id: "diabetes_type",
+            type: "multi",
+            label: "Diabetes type(s)",
+            help: "Select every option that fits this patient.",
+            options: [
+              { value: "T1DM", label: "Type 1 diabetes mellitus (T1DM)" },
+              { value: "T2DM", label: "Type 2 diabetes mellitus (T2DM)" },
+              { value: "gestational", label: "Gestational diabetes" },
+              { value: "other", label: "Other forms of diabetes" }
+            ]
+          },
+          {
+            id: "a1c_current_percent",
+            type: "number",
+            label: "Current A1C (%)",
+            help: "The A1c target should be tailored to the individual through shared-decision making.",
+            min: 4,
+            max: 18,
+            step: 0.1
+          },
+          {
+            id: "a1c_target_percent",
+            type: "number",
+            label: "Target A1C (%)",
+            help: "The simplified tool compares current A1C against this target.",
+            min: 5,
+            max: 10,
+            step: 0.1
+          },
+          {
+            id: "fasting_glucose_mg_dl",
+            type: "number",
+            label: "Fasting glucose (mg/dL)",
+            help: "Fasting glucose helps assess basal control of the current regimen.",
+            min: 40,
+            max: 700,
+            step: 1
+          },
+          {
+            id: "postprandial_glucose_mg_dl",
+            type: "number",
+            label: "Postprandial glucose (mg/dL)",
+            help: "Postprandial glucose is the glucose level after a meal.",
+            min: 40,
+            max: 700,
+            step: 1
+          },
+          {
+            id: "symptomatic_hyperglycemia",
+            type: "checkbox",
+            label: "Symptomatic hyperglycemia",
+            help: "Triggers the severe hyperglycemia branch."
+          },
+          {
+            id: "catabolic_features_present",
+            type: "checkbox",
+            label: "Catabolic features present",
+            help: "For example weight loss, ketosis concerns, or marked clinical decompensation."
+          }
+        ]
+      },
+      {
+        title: "Cardiorenal Drivers",
+        description: "These inputs steer ASCVD, heart failure, and CKD priority branches.",
+        open: true,
+        fields: [
+          {
+            id: "has_established_ASCVD",
+            type: "checkbox",
+            label: "Established ASCVD"
+          },
+          {
+            id: "has_indicators_high_CVD_risk",
+            type: "checkbox",
+            label: "Indicators of high cardiovascular risk"
+          },
+          {
+            id: "has_HF",
+            type: "checkbox",
+            label: "Heart failure present"
+          },
+          {
+            id: "HF_type",
+            type: "select",
+            label: "Heart failure type",
+            help: "Only used when HF is present.",
+            options: [
+              { value: "NA", label: "Not specified" },
+              { value: "HFpEF", label: "HFpEF" },
+              { value: "HFrEF", label: "HFrEF" },
+              { value: "other", label: "Other / mixed" }
+            ]
+          },
+          {
+            id: "HF_symptomatic",
+            type: "checkbox",
+            label: "Symptomatic heart failure",
+            help: "Needed for the symptomatic HFpEF plus obesity branch."
+          },
+          {
+            id: "egfr_ml_min_1_73m2",
+            type: "number",
+            label: "eGFR (mL/min/1.73 m²)",
+            help: "CKD is flagged below 60; advanced CKD below 30.",
+            min: 1,
+            max: 180,
+            step: 1
+          },
+          {
+            id: "albuminuria_present",
+            type: "checkbox",
+            help: "Defined as urine albumin-to-creatinine ratio (ACR) ≥ 3.0 mg/mmol [30 mg/g].",
+            label: "Albuminuria present",
+            fullWidth: true
+          }
+        ]
+      },
+      {
+        title: "Weight and Liver",
+        description: "Weight-loss goals and liver disease branches can elevate incretin-based therapy.",
+        open: false,
+        fields: [
+          {
+            id: "has_obesity",
+            type: "checkbox",
+            label: "Obesity present"
+          },
+          {
+            id: "weight_loss_goal_priority",
+            type: "checkbox",
+            label: "Weight loss is an explicit goal"
+          },
+          {
+            id: "prioritize_weight_loss",
+            type: "checkbox",
+            label: "Prioritize weight loss",
+            help: "Mirrors the pseudocode's weight-priority flag."
+          },
+          {
+            id: "has_MASLD",
+            type: "checkbox",
+            label: "MASLD present"
+          },
+          {
+            id: "has_MASH",
+            type: "checkbox",
+            label: "MASH present"
+          },
+          {
+            id: "high_risk_liver_fibrosis",
+            type: "checkbox",
+            label: "High liver fibrosis risk"
+          }
+        ]
+      },
+      {
+        title: "Safety and Preferences",
+        description: "Hypoglycemia risk, oral-only preference, and cost barriers change the rank order.",
+        open: false,
+        fields: [
+          {
+            id: "high_hypoglycemia_risk",
+            type: "checkbox",
+            label: "High hypoglycemia risk"
+          },
+          {
+            id: "prioritize_hypoglycemia_avoidance",
+            type: "checkbox",
+            label: "Prioritize hypoglycemia avoidance"
+          },
+          {
+            id: "cost_barrier_present",
+            type: "checkbox",
+            label: "Cost barrier present"
+          },
+          {
+            id: "prefers_oral_only",
+            type: "checkbox",
+            label: "Prefers oral-only therapy",
+            help: "Pushes injectable classes down unless severe hyperglycemia is present."
+          },
+          {
+            id: "willing_to_use_injection",
+            type: "checkbox",
+            label: "Willing to use injectable therapy",
+            help: "Needed for GLP-1 based escalation in this simplified version.",
+            fullWidth: true
+          }
+        ]
+      },
+      {
+        title: "Current Therapy",
+        description: "Classes already being used are removed from the recommendation lanes during cleanup.",
+        open: false,
+        fields: [
+          {
+            id: "on_metformin",
+            type: "checkbox",
+            label: "Already on metformin"
+          },
+          {
+            id: "on_SGLT2i",
+            type: "checkbox",
+            label: "Already on an SGLT2 inhibitor"
+          },
+          {
+            id: "on_GLP1_RA",
+            type: "checkbox",
+            label: "Already on a GLP-1 RA"
+          },
+          {
+            id: "on_dual_GIP_GLP1_RA",
+            type: "checkbox",
+            label: "Already on dual GIP/GLP-1 therapy"
+          },
+          {
+            id: "on_DPP4i",
+            type: "checkbox",
+            label: "Already on a DPP-4 inhibitor"
+          },
+          {
+            id: "on_sulfonylurea",
+            type: "checkbox",
+            label: "Already on a sulfonylurea"
+          },
+          {
+            id: "on_basal_insulin",
+            type: "checkbox",
+            label: "Already on basal insulin"
+          }
+        ]
+      },
+      {
+        title: "Contraindications and Hard Stops",
+        description: "These are placed into the avoid lane before final cleanup.",
+        open: false,
+        fields: [
+          {
+            id: "metformin_contraindicated",
+            type: "checkbox",
+            label: "Metformin contraindicated"
+          },
+          {
+            id: "SGLT2i_contraindicated",
+            type: "checkbox",
+            label: "SGLT2 inhibitor contraindicated"
+          },
+          {
+            id: "GLP1_RA_contraindicated",
+            type: "checkbox",
+            label: "GLP-1 RA contraindicated"
+          },
+          {
+            id: "dual_GIP_GLP1_RA_contraindicated",
+            type: "checkbox",
+            label: "Dual GIP/GLP-1 RA contraindicated"
+          },
+          {
+            id: "pioglitazone_contraindicated",
+            type: "checkbox",
+            label: "Pioglitazone contraindicated"
+          },
+          {
+            id: "dpp4i_contraindicated",
+            type: "checkbox",
+            label: "DPP-4 inhibitor contraindicated"
+          },
+          {
+            id: "sulfonylurea_contraindicated",
+            type: "checkbox",
+            label: "Sulfonylurea contraindicated"
+          },
+          {
+            id: "basal_insulin_contraindicated",
+            type: "checkbox",
+            label: "Basal insulin contraindicated",
+            fullWidth: true
+          }
+        ]
+      }
+    ];
+
+    const DEFAULT_STATE = {
+      diabetes_type: "T2DM",
+      diabetes_type_T1DM: false,
+      diabetes_type_T2DM: true,
+      diabetes_type_gestational: false,
+      diabetes_type_other: false,
+      patient_age_years: 55,
+      patient_sex: "unknown",
+      is_pregnant_or_planning: false,
+      weight_kg: null,
+      bmi: 32.0,
+      a1c_current_percent: 8.6,
+      a1c_target_percent: 7.0,
+      no_a1c_goal: false,
+      random_glucose_mg_dl: null,
+      fasting_glucose_mg_dl: 150,
+      postprandial_glucose_mg_dl: 210,
+      symptomatic_hyperglycemia: false,
+      catabolic_features_present: false,
+      has_ASCVD_or_high_risk: false,
+      has_established_ASCVD: false,
+      has_indicators_high_CVD_risk: false,
+      has_HF: false,
+      HF_type: "NA",
+      HF_symptomatic: false,
+      egfr_ml_min_1_73m2: 82,
+      albuminuria_present: false,
+      has_obesity: true,
+      weight_loss_goal_priority: false,
+      prioritize_weight_loss: false,
+      liver_condition: "none",
+      has_MASLD: false,
+      has_MASH: false,
+      high_risk_liver_fibrosis: false,
+      high_hypoglycemia_risk: false,
+      prioritize_hypoglycemia_avoidance: false,
+      cost_barrier_present: false,
+      prefers_oral_only: false,
+      willing_to_use_injection: true,
+      on_metformin: false,
+      on_SGLT2i: false,
+      on_GLP1_RA: false,
+      on_dual_GIP_GLP1_RA: false,
+      on_DPP4i: false,
+      on_sulfonylurea: false,
+      on_basal_insulin: false,
+      metformin_contraindicated: false,
+      SGLT2i_contraindicated: false,
+      GLP1_RA_contraindicated: false,
+      dual_GIP_GLP1_RA_contraindicated: false,
+      pioglitazone_contraindicated: false,
+      dpp4i_contraindicated: false,
+      sulfonylurea_contraindicated: false,
+      basal_insulin_contraindicated: false
+    };
+
+    const DEMO_STATE = {
+      diabetes_type: "T2DM",
+      diabetes_type_T1DM: false,
+      diabetes_type_T2DM: true,
+      diabetes_type_gestational: false,
+      diabetes_type_other: false,
+      patient_age_years: 64,
+      patient_sex: "unknown",
+      is_pregnant_or_planning: false,
+      weight_kg: null,
+      bmi: 34.2,
+      a1c_current_percent: 10.8,
+      a1c_target_percent: 7.0,
+      no_a1c_goal: false,
+      random_glucose_mg_dl: 325,
+      fasting_glucose_mg_dl: 188,
+      postprandial_glucose_mg_dl: 325,
+      symptomatic_hyperglycemia: true,
+      catabolic_features_present: false,
+      has_ASCVD_or_high_risk: true,
+      has_established_ASCVD: true,
+      has_indicators_high_CVD_risk: false,
+      has_HF: true,
+      HF_type: "HFpEF",
+      HF_symptomatic: true,
+      egfr_ml_min_1_73m2: 41,
+      albuminuria_present: true,
+      has_obesity: true,
+      weight_loss_goal_priority: false,
+      prioritize_weight_loss: false,
+      liver_condition: "MASLD",
+      has_MASLD: true,
+      has_MASH: false,
+      high_risk_liver_fibrosis: false,
+      high_hypoglycemia_risk: true,
+      prioritize_hypoglycemia_avoidance: true,
+      cost_barrier_present: false,
+      prefers_oral_only: false,
+      willing_to_use_injection: true,
+      on_metformin: true,
+      on_SGLT2i: false,
+      on_GLP1_RA: false,
+      on_dual_GIP_GLP1_RA: false,
+      on_DPP4i: false,
+      on_sulfonylurea: false,
+      on_basal_insulin: false,
+      metformin_contraindicated: false,
+      SGLT2i_contraindicated: false,
+      GLP1_RA_contraindicated: false,
+      dual_GIP_GLP1_RA_contraindicated: false,
+      pioglitazone_contraindicated: false,
+      dpp4i_contraindicated: false,
+      sulfonylurea_contraindicated: false,
+      basal_insulin_contraindicated: false
+    };
+
+    const WIZARD_STAGES = [
+      { key: "scope", label: "Scope" },
+      { key: "demographics", label: "Demographics" },
+      { key: "glycemia", label: "Glycemia" },
+      { key: "cardiorenal", label: "Cardiorenal" },
+      { key: "weight_liver", label: "Weight and Liver" },
+      { key: "preferences", label: "Safety and Preferences" },
+      { key: "current_therapy", label: "Current Therapy" },
+      { key: "exclusions", label: "Exclusions" }
+    ];
+
+    const yesNoOptions = [
+      { label: "Yes", value: true },
+      { label: "No", value: false }
+    ];
+
+    const DIABETES_TYPE_OPTIONS = [
+      { key: "diabetes_type_T1DM", label: "Type 1 diabetes mellitus (T1DM)" },
+      { key: "diabetes_type_T2DM", label: "Type 2 diabetes mellitus (T2DM)" },
+      { key: "diabetes_type_gestational", label: "Gestational diabetes" },
+      { key: "diabetes_type_other", label: "Other forms of diabetes" }
+    ];
+
+    const LIVER_CONDITION_OPTIONS = [
+      { label: "None", value: "none" },
+      { label: "MASLD", value: "MASLD" },
+      { label: "MASH", value: "MASH" },
+      { label: "High liver fibrosis risk", value: "high_fibrosis_risk" }
+    ];
+
+    const QUESTION_FLOW = [
+      {
+        id: "diabetes_type",
+        stageKey: "scope",
+        inputType: "multi",
+        label: "What type(s) of diabetes does the patient have?",
+        help: "Select every option that fits this patient, then continue.",
+        options: DIABETES_TYPE_OPTIONS
+      },
+      {
+        id: "patient_age_years",
+        stageKey: "demographics",
+        inputType: "number",
+        label: "What is the patient’s age?",
+        help: "Age may influence glycemic targets, hypoglycemia risk, and medication selection.",
+        min: 19,
+        max: 99,
+        step: 1,
+        suffix: "years",
+        lowLabel: "19",
+        highLabel: "99+",
+        integerOnly: true,
+        visibleIf: hasType2Selection
+      },
+      {
+        id: "is_pregnant_or_planning",
+        stageKey: "demographics",
+        inputType: "choice",
+        label: "Is the patient pregnant or planning pregnancy?",
+        help: "Pregnancy significantly impacts medication safety and regimen selection.",
+        options: yesNoOptions,
+        field: "is_pregnant_or_planning",
+        visibleIf: hasType2Selection
+      },
+      {
+        id: "bmi",
+        stageKey: "demographics",
+        inputType: "number",
+        label: "What is the patient’s BMI?",
+        help: "Weight status may guide selection of agents with weight loss, neutrality, or gain effects.",
+        min: 10,
+        max: 80,
+        step: 0.1,
+        suffix: "kg/m²",
+        sectionLabel: "Weight and metabolic considerations",
+        visibleIf: isType2Case
+      },
+      {
+        id: "a1c_current_percent",
+        stageKey: "glycemia",
+        inputType: "number",
+        label: "What is the current A1C?",
+        help: "Used for the A1C gap and severe hyperglycemia checks.",
+        min: 4,
+        max: 18,
+        step: 0.1,
+        suffix: "%",
+        lowLabel: "≤4",
+        highLabel: "≥18",
+        visibleIf: isType2Case
+      },
+      {
+        id: "a1c_target_percent",
+        stageKey: "glycemia",
+        inputType: "number",
+        label: "What is the A1C target for this patient?",
+        help: "The A1c target should be tailored to the individual through shared-decision making.",
+        min: 5.7,
+        max: 10,
+        step: 0.1,
+        suffix: "%",
+        lowLabel: "≤5.7",
+        specialAction: "no-a1c-goal",
+        visibleIf: isType2Case
+      },
+      {
+        id: "fasting_glucose_mg_dl",
+        stageKey: "glycemia",
+        inputType: "number",
+        label: "What is the patient’s fasting glucose level?",
+        help: "Fasting glucose helps assess basal control of the current regimen.",
+        min: 40,
+        max: 700,
+        step: 1,
+        suffix: "mg/dL",
+        visibleIf: isType2Case
+      },
+      {
+        id: "postprandial_glucose_mg_dl",
+        stageKey: "glycemia",
+        inputType: "number",
+        label: "What is the patient’s postprandial glucose level?",
+        help: "Postprandial glucose is the glucose level after a meal and helps assess mealtime glucose excursions.",
+        min: 40,
+        max: 700,
+        step: 1,
+        suffix: "mg/dL",
+        visibleIf: isType2Case
+      },
+      {
+        id: "symptomatic_hyperglycemia",
+        stageKey: "glycemia",
+        inputType: "choice",
+        label: "Is symptomatic hyperglycemia present?",
+        help: "Common symptoms include polyuria, polydipsia, and lethargy.",
+        options: yesNoOptions,
+        field: "symptomatic_hyperglycemia",
+        visibleIf: isType2Case
+      },
+      {
+        id: "catabolic_features_present",
+        stageKey: "glycemia",
+        inputType: "choice",
+        label: "Are catabolic features present?",
+        help: "For example weight loss, ketosis concern, or marked clinical decompensation.",
+        options: yesNoOptions,
+        field: "catabolic_features_present",
+        visibleIf: isType2Case
+      },
+      {
+        id: "has_ASCVD_or_high_risk",
+        stageKey: "cardiorenal",
+        inputType: "choice",
+        label: "Is established ASCVD or high ASCVD risk present?",
+        help: "ASCVD includes ACS, MI, stroke, arterial revascularization.",
+        options: yesNoOptions,
+        apply(state, value) {
+          state.has_ASCVD_or_high_risk = value;
+          state.has_established_ASCVD = value;
+          state.has_indicators_high_CVD_risk = value;
+        },
+        visibleIf: isType2Case
+      },
+      {
+        id: "has_HF",
+        stageKey: "cardiorenal",
+        inputType: "choice",
+        label: "Is heart failure present?",
+        options: yesNoOptions,
+        field: "has_HF",
+        visibleIf: isType2Case
+      },
+      {
+        id: "HF_type",
+        stageKey: "cardiorenal",
+        inputType: "choice",
+        label: "What type of heart failure is present?",
+        help: "This mainly matters for the symptomatic HFpEF with obesity branch.",
+        options: [
+          { label: "HFpEF", value: "HFpEF" },
+          { label: "HFrEF", value: "HFrEF" },
+          { label: "Other or mixed", value: "other" },
+          { label: "Not specified", value: "NA" }
+        ],
+        field: "HF_type",
+        visibleIf(state) {
+          return isType2Case(state) && state.has_HF;
+        }
+      },
+      {
+        id: "HF_symptomatic",
+        stageKey: "cardiorenal",
+        inputType: "choice",
+        label: "Is the heart failure symptomatic?",
+        options: yesNoOptions,
+        field: "HF_symptomatic",
+        visibleIf(state) {
+          return isType2Case(state) && state.has_HF;
+        }
+      },
+      {
+        id: "egfr_ml_min_1_73m2",
+        stageKey: "cardiorenal",
+        inputType: "number",
+        label: "What is the current eGFR?",
+        help: "CKD is flagged below 60; advanced CKD below 30.",
+        min: 1,
+        max: 180,
+        step: 1,
+        suffix: "mL/min/1.73 m²",
+        visibleIf: isType2Case
+      },
+      {
+        id: "albuminuria_present",
+        stageKey: "cardiorenal",
+        inputType: "choice",
+        label: "Is albuminuria present?",
+        help: "Defined as urine albumin-to-creatinine ratio (ACR) ≥ 3.0 mg/mmol [30 mg/g].",
+        options: yesNoOptions,
+        field: "albuminuria_present",
+        visibleIf: isType2Case
+      },
+      {
+        id: "liver_condition",
+        stageKey: "weight_liver",
+        inputType: "choice",
+        label: "Are any of these liver conditions present?",
+        help: "Select the single best answer, then continue.",
+        options: LIVER_CONDITION_OPTIONS,
+        apply(state, value) {
+          state.liver_condition = value;
+          state.has_MASLD = value === "MASLD";
+          state.has_MASH = value === "MASH";
+          state.high_risk_liver_fibrosis = value === "high_fibrosis_risk";
+        },
+        visibleIf: isType2Case
+      },
+      {
+        id: "modifier_flags",
+        stageKey: "preferences",
+        inputType: "multi",
+        label: "Which safety and cost modifiers apply?",
+        help: "Select all that apply. Route preference is asked next on its own branch.",
+        options: [
+          { key: "high_hypoglycemia_risk", label: "High hypoglycemia risk" },
+          { key: "prioritize_hypoglycemia_avoidance", label: "Prioritize hypoglycemia avoidance" },
+          { key: "cost_barrier_present", label: "Cost barrier present" }
+        ],
+        visibleIf: isType2Case
+      },
+      {
+        id: "route_preference",
+        stageKey: "preferences",
+        inputType: "choice",
+        label: "What route preference should steer the recommendation?",
+        help: "Oral-only preference pushes injectable options down unless severe hyperglycemia is present.",
+        options: [
+          { label: "Open to injectable therapy", value: "injectable" },
+          { label: "Oral only", value: "oral_only" },
+          { label: "No strong route preference", value: "neutral" }
+        ],
+        apply(state, value) {
+          state.prefers_oral_only = value === "oral_only";
+          state.willing_to_use_injection = value === "injectable";
+        },
+        visibleIf: isType2Case
+      },
+      {
+        id: "current_therapy_flags",
+        stageKey: "current_therapy",
+        inputType: "multi",
+        label: "Which glucose-lowering classes is the patient already using?",
+        help: "Already-used classes are removed from the final recommendation lanes.",
+        options: [
+          { key: "on_metformin", label: "Metformin" },
+          { key: "on_SGLT2i", label: "SGLT2 inhibitor" },
+          { key: "on_GLP1_RA", label: "GLP-1 RA" },
+          { key: "on_dual_GIP_GLP1_RA", label: "Dual GIP/GLP-1 RA" },
+          { key: "on_DPP4i", label: "DPP-4 inhibitor" },
+          { key: "on_sulfonylurea", label: "Sulfonylurea" },
+          { key: "on_basal_insulin", label: "Basal insulin" }
+        ],
+        visibleIf: isType2Case
+      },
+      {
+        id: "contraindication_flags",
+        stageKey: "exclusions",
+        inputType: "multi",
+        label: "Which classes are contraindicated or hard stops?",
+        help: "These are moved into the avoid lane before final cleanup.",
+        options: [
+          { key: "metformin_contraindicated", label: "Metformin" },
+          { key: "SGLT2i_contraindicated", label: "SGLT2 inhibitor" },
+          { key: "GLP1_RA_contraindicated", label: "GLP-1 RA" },
+          { key: "dual_GIP_GLP1_RA_contraindicated", label: "Dual GIP/GLP-1 RA" },
+          { key: "pioglitazone_contraindicated", label: "Pioglitazone" },
+          { key: "dpp4i_contraindicated", label: "DPP-4 inhibitor" },
+          { key: "sulfonylurea_contraindicated", label: "Sulfonylurea" },
+          { key: "basal_insulin_contraindicated", label: "Basal insulin" }
+        ],
+        visibleIf: isType2Case
+      }
+    ];
+
+    const dom = {
+      pageShell: document.querySelector(".page-shell"),
+      demoBtn: document.getElementById("demo-btn"),
+      ehrUploadInput: document.getElementById("ehr-upload-input"),
+      ehrUploadStatus: document.getElementById("ehr-upload-status"),
+      jumpToResultsTopBtn: document.getElementById("jump-to-results-top"),
+      backToQuestionsBtn: document.getElementById("back-to-questions-btn"),
+      resetBtn: document.getElementById("reset-btn"),
+      resultsTabButton: document.getElementById("tab-button-results"),
+      tabButtons: Array.from(document.querySelectorAll(".tab-btn")),
+      tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
+      wizardStageLabel: document.getElementById("wizard-stage-label"),
+      wizardProgressCopy: document.getElementById("wizard-progress-copy"),
+      wizardProgressFill: document.getElementById("wizard-progress-fill"),
+      wizardStepCount: document.getElementById("wizard-step-count"),
+      wizardPathCount: document.getElementById("wizard-path-count"),
+      flowchartViewport: document.getElementById("flowchart-viewport"),
+      flowchartCanvas: document.getElementById("flowchart-canvas"),
+      questionScrollShell: document.getElementById("question-scroll-shell"),
+      questionHistoryList: document.getElementById("question-history-list"),
+      questionCard: document.getElementById("question-card"),
+      questionStage: document.getElementById("question-stage"),
+      questionTitle: document.getElementById("question-title"),
+      questionHelp: document.getElementById("question-help"),
+      questionInputArea: document.getElementById("question-input-area"),
+      backQuestionBtn: document.getElementById("back-question-btn"),
+      advanceQuestionBtn: document.getElementById("advance-question-btn"),
+      statusBanner: document.getElementById("status-banner"),
+      preferredGrid: document.getElementById("preferred-grid"),
+      acceptableGrid: document.getElementById("acceptable-grid"),
+      avoidGrid: document.getElementById("avoid-grid"),
+      preferredCount: document.getElementById("preferred-count"),
+      acceptableCount: document.getElementById("acceptable-count"),
+      avoidCount: document.getElementById("avoid-count"),
+      dataCompletenessSummary: document.getElementById("data-completeness-summary"),
+      rationaleRow: document.getElementById("rationale-row"),
+      flagRow: document.getElementById("flag-row"),
+      clinicalInsightList: document.getElementById("clinical-insight-list"),
+      dataQualityList: document.getElementById("data-quality-list"),
+      patientEvidenceGrid: document.getElementById("patient-evidence-grid"),
+      compareLeft: document.getElementById("compare-left"),
+      compareRight: document.getElementById("compare-right"),
+      compareLeftCard: document.getElementById("compare-left-card"),
+      compareRightCard: document.getElementById("compare-right-card"),
+      disclaimerModal: document.getElementById("disclaimer-modal"),
+      disclaimerDialog: document.querySelector(".disclaimer-dialog"),
+      disclaimerAcknowledgeBtn: document.getElementById("disclaimer-ack-btn")
+    };
+
+    const groupedDrugs = groupDrugsByClass(DRUG_DATA.drugs);
+    const QUESTION_LOOKUP = Object.fromEntries(QUESTION_FLOW.map((question) => [question.id, question]));
+    const SAMPLE_EHR_PROFILE = createEhrProfile(PATIENT_DATA, "patientData.json");
+    let activeEhrProfile = SAMPLE_EHR_PROFILE;
+    let compareState = { left: "", right: "" };
+    let latestState = { ...DEFAULT_STATE };
+    let latestResult = null;
+    let wizardSession = {
+      answeredQuestionIds: [],
+      questionHistory: [],
+      visitedQuestionIds: [],
+      currentQuestionId: null
+    };
+
+    bindStaticEvents();
+    clearStoredState();
+    updateUploadStatus("Sample EHR loaded", "ok");
+    hydrateSession(createCompletedSession(activeEhrProfile.state));
+    switchTab("tab-results");
+    showDisclaimerModal();
+
+    function bindStaticEvents() {
+      dom.demoBtn.addEventListener("click", () => {
+        activeEhrProfile = SAMPLE_EHR_PROFILE;
+        updateUploadStatus("Sample EHR loaded", "ok");
+        hydrateSession(createCompletedSession(activeEhrProfile.state));
+        switchTab("tab-results");
+      });
+      dom.resetBtn.addEventListener("click", () => {
+        hydrateSession(createFreshSession(activeEhrProfile.state));
+        switchTab("tab-intake");
+      });
+      dom.ehrUploadInput?.addEventListener("change", handleEhrUpload);
+      dom.jumpToResultsTopBtn.addEventListener("click", () => switchTab("tab-results"));
+      dom.backToQuestionsBtn.addEventListener("click", () => switchTab("tab-intake"));
+      dom.backQuestionBtn.addEventListener("click", goToPreviousQuestion);
+      dom.advanceQuestionBtn.addEventListener("click", advanceCurrentQuestion);
+      dom.disclaimerAcknowledgeBtn?.addEventListener("click", hideDisclaimerModal);
+      dom.questionHistoryList.addEventListener("click", handleQuestionJumpClick);
+      dom.flowchartCanvas.addEventListener("click", handleQuestionJumpClick);
+      dom.questionHistoryList.addEventListener("keydown", handleQuestionJumpKeydown);
+      dom.flowchartCanvas.addEventListener("keydown", handleQuestionJumpKeydown);
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && isDisclaimerModalOpen()) {
+          hideDisclaimerModal();
+        }
+      });
+
+      dom.tabButtons.forEach((button) => {
+        button.addEventListener("click", () => switchTab(button.dataset.tabTarget));
+      });
+
+      dom.questionInputArea.addEventListener("click", (event) => {
+        const actionButton = event.target.closest("[data-question-action]");
+        if (actionButton) {
+          const currentQuestion = getCurrentQuestion(latestState);
+          if (currentQuestion?.id === "a1c_target_percent" &&
+              actionButton.dataset.questionAction === "no-a1c-goal") {
+            const nextState = { ...latestState, no_a1c_goal: true };
+            commitQuestionAnswer(currentQuestion, nextState);
+          }
+          return;
+        }
+
+        const choiceButton = event.target.closest("[data-option-index]");
+        if (!choiceButton) {
+          return;
+        }
+
+        const currentQuestion = getCurrentQuestion(latestState);
+        if (!currentQuestion || currentQuestion.inputType !== "choice") {
+          return;
+        }
+
+        const optionIndex = Number(choiceButton.dataset.optionIndex);
+        if (!Number.isInteger(optionIndex)) {
+          return;
+        }
+
+        const option = currentQuestion.options[optionIndex];
+        if (!option) {
+          return;
+        }
+
+        const nextState = { ...latestState };
+        applyQuestionAnswer(currentQuestion, nextState, option.value);
+        commitQuestionAnswer(currentQuestion, nextState);
+      });
+
+      dom.questionInputArea.addEventListener("input", (event) => {
+        const input = event.target.closest("#wizard-number-input");
+        const currentQuestion = getCurrentQuestion(latestState);
+        if (!input || !currentQuestion?.integerOnly) {
+          return;
+        }
+
+        input.value = input.value.match(/^\d+/)?.[0] || "";
+      });
+
+      dom.questionInputArea.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+
+        const currentQuestion = getCurrentQuestion(latestState);
+        if (!currentQuestion || currentQuestion.inputType === "choice") {
+          return;
+        }
+
+        event.preventDefault();
+        advanceCurrentQuestion();
+      });
+
+      dom.compareLeft.addEventListener("change", () => {
+        compareState.left = dom.compareLeft.value;
+        if (latestResult) {
+          renderCompareCards(latestResult, latestState);
+        }
+      });
+
+      dom.compareRight.addEventListener("change", () => {
+        compareState.right = dom.compareRight.value;
+        if (latestResult) {
+          renderCompareCards(latestResult, latestState);
+        }
+      });
+    }
+
+    async function handleEhrUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      try {
+        updateUploadStatus(`Reading ${file.name}...`, "");
+        const text = await file.text();
+        const uploadedData = JSON.parse(text);
+        activeEhrProfile = createEhrProfile(uploadedData, file.name);
+        compareState = { left: "", right: "" };
+        hydrateSession(createCompletedSession(activeEhrProfile.state));
+        switchTab("tab-results");
+        updateUploadStatus(`Loaded ${file.name}`, "ok");
+      } catch (error) {
+        console.error("Unable to import EHR JSON.", error);
+        updateUploadStatus("Upload failed: invalid EHR JSON", "error");
+      } finally {
+        event.target.value = "";
+      }
+    }
+
+    function updateUploadStatus(message, tone) {
+      if (!dom.ehrUploadStatus) {
+        return;
+      }
+
+      dom.ehrUploadStatus.textContent = message;
+      if (tone) {
+        dom.ehrUploadStatus.dataset.tone = tone;
+      } else {
+        delete dom.ehrUploadStatus.dataset.tone;
+      }
+    }
+
+    function handleQuestionJumpClick(event) {
+      const jumpSource = event.target instanceof Element ? event.target : null;
+      const jumpTarget = jumpSource?.closest("[data-question-jump]");
+      if (!jumpTarget) {
+        return;
+      }
+
+      jumpToQuestion(jumpTarget.dataset.questionJump);
+    }
+
+    function handleQuestionJumpKeydown(event) {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      const jumpSource = event.target instanceof Element ? event.target : null;
+      const jumpTarget = jumpSource?.closest("[data-question-jump]");
+      if (!jumpTarget) {
+        return;
+      }
+
+      event.preventDefault();
+      jumpToQuestion(jumpTarget.dataset.questionJump);
+    }
+
+    function jumpToQuestion(questionId) {
+      if (!questionId || !QUESTION_LOOKUP[questionId]) {
+        return;
+      }
+
+      const visibleIds = getVisibleQuestions(latestState).map((question) => question.id);
+      if (!visibleIds.includes(questionId)) {
+        return;
+      }
+
+      wizardSession.currentQuestionId = questionId;
+      switchTab("tab-intake");
+      persistState();
+      renderApplication(latestState);
+    }
+
+    function isDisclaimerModalOpen() {
+      return Boolean(dom.disclaimerModal?.classList.contains("is-open"));
+    }
+
+    function showDisclaimerModal() {
+      if (!dom.disclaimerModal) {
+        return;
+      }
+
+      dom.disclaimerModal.hidden = false;
+      dom.disclaimerModal.setAttribute("aria-hidden", "false");
+      dom.disclaimerModal.classList.add("is-open");
+      document.body.classList.add("has-disclaimer-open");
+
+      if (dom.pageShell) {
+        dom.pageShell.setAttribute("aria-hidden", "true");
+        if ("inert" in dom.pageShell) {
+          dom.pageShell.inert = true;
+        }
+      }
+
+      requestAnimationFrame(() => {
+        dom.disclaimerAcknowledgeBtn?.focus();
+      });
+    }
+
+    function hideDisclaimerModal() {
+      if (!dom.disclaimerModal) {
+        return;
+      }
+
+      dom.disclaimerModal.classList.remove("is-open");
+      dom.disclaimerModal.setAttribute("aria-hidden", "true");
+      dom.disclaimerModal.hidden = true;
+      document.body.classList.remove("has-disclaimer-open");
+
+      if (dom.pageShell) {
+        dom.pageShell.removeAttribute("aria-hidden");
+        if ("inert" in dom.pageShell) {
+          dom.pageShell.inert = false;
+        }
+      }
+    }
+
+    function hydrateSession(savedSession) {
+      const legacyState = savedSession && !savedSession.state ? savedSession : null;
+      latestState = normalizeState({
+        ...DEFAULT_STATE,
+        ...(savedSession?.state || legacyState || DEFAULT_STATE)
+      });
+
+      wizardSession = {
+        answeredQuestionIds: Array.isArray(savedSession?.answeredQuestionIds) ? [...savedSession.answeredQuestionIds] : [],
+        questionHistory: Array.isArray(savedSession?.questionHistory) ? [...savedSession.questionHistory] : [],
+        visitedQuestionIds: Array.isArray(savedSession?.visitedQuestionIds) ? [...savedSession.visitedQuestionIds] : [],
+        currentQuestionId: savedSession?.currentQuestionId || null
+      };
+
+      pruneWizardSession(latestState);
+
+      if (!wizardSession.currentQuestionId && wizardSession.answeredQuestionIds.length === 0) {
+        wizardSession.currentQuestionId = getNextQuestionId(latestState);
+      }
+
+      if (legacyState) {
+        wizardSession.currentQuestionId = getNextQuestionId(latestState);
+      }
+
+      persistState();
+      renderApplication(latestState);
+    }
+
+    function createFreshSession(state) {
+      return {
+        state: normalizeState({ ...DEFAULT_STATE, ...state }),
+        answeredQuestionIds: [],
+        questionHistory: [],
+        visitedQuestionIds: [],
+        currentQuestionId: getFirstVisibleQuestionId(normalizeState({ ...DEFAULT_STATE, ...state }))
+      };
+    }
+
+    function createCompletedSession(state) {
+      const normalized = normalizeState({ ...DEFAULT_STATE, ...state });
+      const visibleIds = getVisibleQuestions(normalized).map((question) => question.id);
+      return {
+        state: normalized,
+        answeredQuestionIds: visibleIds,
+        questionHistory: visibleIds,
+        visitedQuestionIds: visibleIds,
+        currentQuestionId: null
+      };
+    }
+
+    function createEhrProfile(patientData, sourceLabel = "EHR JSON") {
+      const quality = {
+        status: "complete",
+        missing: [],
+        outdated: [],
+        conflicts: [],
+        meta: patientData?.meta || {}
+      };
+      const state = {
+        ...DEFAULT_STATE,
+        diabetes_type_T1DM: false,
+        diabetes_type_T2DM: false,
+        diabetes_type_gestational: false,
+        diabetes_type_other: false
+      };
+      const demographics = patientData?.demographics || {};
+      const conditions = patientData?.conditions || {};
+      const labs = patientData?.labs || {};
+      const heartFailure = conditions.heart_failure || {};
+      const ckd = conditions.ckd || {};
+      const vitals = patientData?.vitals || {};
+      const preferences = patientData?.preferences || {};
+      const safety = patientData?.safety || {};
+      const goals = patientData?.goals || {};
+
+      const diabetesKeys = getDiabetesTypeKeys(conditions.diabetes_type);
+      if (conditions.t1dm || conditions.type1) diabetesKeys.add("diabetes_type_T1DM");
+      if (conditions.t2dm || conditions.type2) diabetesKeys.add("diabetes_type_T2DM");
+      if (conditions.gestational_diabetes) diabetesKeys.add("diabetes_type_gestational");
+
+      if (!diabetesKeys.size) {
+        addQualityIssue(quality.missing, "Diabetes diagnosis", "No structured diabetes type was found.", true);
+      } else {
+        diabetesKeys.forEach((key) => {
+          state[key] = true;
+        });
+      }
+
+      const age = firstNumeric(demographics.age);
+      if (age === null) {
+        addQualityIssue(quality.missing, "Age", "Demographic age is required for individualized targets.", true);
+      } else {
+        state.patient_age_years = age;
+      }
+
+      if (demographics.sex) {
+        state.patient_sex = demographics.sex;
+      } else {
+        addQualityIssue(quality.missing, "Sex", "Sex was not present in the EHR extract.", false);
+      }
+
+      const a1cValue = firstNumeric(labs.a1c?.value);
+      if (a1cValue === null) {
+        addQualityIssue(quality.missing, "A1C", "No recent A1C value was available.", true);
+      } else {
+        state.a1c_current_percent = a1cValue;
+      }
+      validateLabFreshness(quality, "A1C", labs.a1c?.date, 180);
+
+      const targetA1c = firstNumeric(goals.a1c_target);
+      if (targetA1c !== null) {
+        state.a1c_target_percent = targetA1c;
+        state.no_a1c_goal = false;
+      }
+
+      const randomGlucose = firstNumeric(labs.random_glucose?.value);
+      if (randomGlucose === null) {
+        addQualityIssue(quality.missing, "Random glucose", "No random glucose value was available.", false);
+      } else {
+        state.random_glucose_mg_dl = randomGlucose;
+      }
+      validateLabFreshness(quality, "Random glucose", labs.random_glucose?.date, 30);
+
+      state.symptomatic_hyperglycemia = Boolean(patientData?.symptoms?.hyperglycemia_symptoms);
+      state.catabolic_features_present = Boolean(patientData?.symptoms?.catabolic_features);
+
+      state.has_ASCVD_or_high_risk = Boolean(conditions.ascvd || conditions.high_ascvd_risk);
+      state.has_established_ASCVD = Boolean(conditions.ascvd);
+      state.has_indicators_high_CVD_risk = Boolean(conditions.high_ascvd_risk || conditions.ascvd);
+
+      state.has_HF = Boolean(heartFailure.present || conditions.hf);
+      if (state.has_HF) {
+        state.HF_type = heartFailure.type || "NA";
+        state.HF_symptomatic = Boolean(heartFailure.symptomatic);
+        if (!heartFailure.type) {
+          addQualityIssue(quality.conflicts, "Heart failure type", "HF is listed, but no HF type is documented.", false);
+        }
+      }
+
+      const egfr = firstNumeric(labs.egfr?.value, ckd.egfr);
+      if (egfr === null) {
+        addQualityIssue(quality.missing, "eGFR", "Renal function is required for CKD and medication safety logic.", true);
+      } else {
+        state.egfr_ml_min_1_73m2 = egfr;
+      }
+      validateLabFreshness(quality, "eGFR", labs.egfr?.date, 180);
+
+      const uacr = firstNumeric(labs.uacr?.value);
+      if (ckd.albuminuria !== undefined) {
+        state.albuminuria_present = Boolean(ckd.albuminuria);
+      } else if (uacr !== null) {
+        state.albuminuria_present = uacr >= 30;
+      } else {
+        addQualityIssue(quality.missing, "Albuminuria status", "UACR or albuminuria flag was not available.", false);
+      }
+      validateLabFreshness(quality, "UACR", labs.uacr?.date, 365);
+
+      const bmi = firstNumeric(vitals.bmi);
+      if (bmi === null) {
+        addQualityIssue(quality.missing, "BMI", "BMI was not available for weight-related prioritization.", false);
+      } else {
+        state.bmi = bmi;
+      }
+
+      const weight = firstNumeric(vitals.weight_kg);
+      if (weight !== null) {
+        state.weight_kg = weight;
+      }
+
+      state.has_obesity = Boolean(conditions.obesity) || state.bmi >= 30;
+      state.weight_loss_goal_priority = Boolean(goals.weight_loss_goal);
+      state.prioritize_weight_loss = Boolean(goals.weight_loss_goal);
+
+      if (conditions.mash) {
+        state.liver_condition = "MASH";
+        state.has_MASH = true;
+        state.has_MASLD = true;
+      } else if (conditions.high_liver_fibrosis_risk) {
+        state.liver_condition = "high_fibrosis_risk";
+        state.high_risk_liver_fibrosis = true;
+      } else if (conditions.masld) {
+        state.liver_condition = "MASLD";
+        state.has_MASLD = true;
+      }
+
+      applyCurrentMedicationFlags(state, patientData?.medications);
+      applyContraindicationFlags(state, safety.contraindications);
+
+      state.high_hypoglycemia_risk = Boolean(safety.high_hypoglycemia_risk);
+      state.prioritize_hypoglycemia_avoidance = Boolean(preferences.hypoglycemia_priority);
+      state.cost_barrier_present = preferences.cost_sensitivity === "high";
+
+      if (preferences.route_preference === "oral_only") {
+        state.prefers_oral_only = true;
+        state.willing_to_use_injection = false;
+      } else if (preferences.route_preference === "open_to_injectable") {
+        state.prefers_oral_only = false;
+        state.willing_to_use_injection = true;
+      }
+
+      const normalizedState = normalizeState(state);
+      return {
+        raw: patientData || {},
+        sourceLabel,
+        state: normalizedState,
+        quality: finalizeDataQuality(quality)
+      };
+    }
+
+    function normalizeState(state) {
+      const nextState = { ...DEFAULT_STATE, ...state };
+      const hasAnyDiabetesType = DIABETES_TYPE_OPTIONS.some((option) => Boolean(nextState[option.key]));
+
+      if (!hasAnyDiabetesType) {
+        nextState.diabetes_type = "NA";
+      } else if (nextState.diabetes_type_T2DM) {
+        nextState.diabetes_type = "T2DM";
+      } else if (nextState.diabetes_type_T1DM) {
+        nextState.diabetes_type = "T1DM";
+      } else if (nextState.diabetes_type_gestational) {
+        nextState.diabetes_type = "gestational";
+      } else {
+        nextState.diabetes_type = "other";
+      }
+
+      nextState.patient_age_years = clamp(toInteger(nextState.patient_age_years, DEFAULT_STATE.patient_age_years), 19, 99);
+      nextState.patient_sex = String(nextState.patient_sex || "unknown");
+      nextState.weight_kg = nextState.weight_kg === null || nextState.weight_kg === undefined || nextState.weight_kg === ""
+        ? null
+        : clamp(toNumber(nextState.weight_kg, DEFAULT_STATE.weight_kg ?? 0), 20, 400);
+      nextState.random_glucose_mg_dl = nextState.random_glucose_mg_dl === null ||
+        nextState.random_glucose_mg_dl === undefined ||
+        nextState.random_glucose_mg_dl === ""
+        ? null
+        : clamp(toNumber(nextState.random_glucose_mg_dl, 0), 40, 1000);
+      nextState.bmi = clamp(toNumber(nextState.bmi, DEFAULT_STATE.bmi), 10, 80);
+      nextState.has_obesity = nextState.bmi >= 30;
+
+      if (nextState.liver_condition === "MASH") {
+        nextState.has_MASH = true;
+      } else if (nextState.liver_condition === "high_fibrosis_risk") {
+        nextState.high_risk_liver_fibrosis = true;
+      } else if (nextState.liver_condition === "MASLD") {
+        nextState.has_MASLD = true;
+      } else if (nextState.has_MASH) {
+        nextState.liver_condition = "MASH";
+      } else if (nextState.high_risk_liver_fibrosis) {
+        nextState.liver_condition = "high_fibrosis_risk";
+      } else if (nextState.has_MASLD) {
+        nextState.liver_condition = "MASLD";
+      } else {
+        nextState.liver_condition = "none";
+      }
+
+      if (!nextState.has_HF) {
+        nextState.HF_type = "NA";
+        nextState.HF_symptomatic = false;
+      }
+
+      if (nextState.prefers_oral_only) {
+        nextState.willing_to_use_injection = false;
+      }
+
+      if (nextState.has_MASH) {
+        nextState.has_MASLD = true;
+      }
+
+      nextState.has_ASCVD_or_high_risk = Boolean(nextState.has_ASCVD_or_high_risk) ||
+        Boolean(nextState.has_established_ASCVD) ||
+        Boolean(nextState.has_indicators_high_CVD_risk);
+      nextState.has_established_ASCVD = Boolean(nextState.has_ASCVD_or_high_risk);
+      nextState.has_indicators_high_CVD_risk = Boolean(nextState.has_ASCVD_or_high_risk);
+
+      return nextState;
+    }
+
+    function pruneWizardSession(state) {
+      const visibleIds = getVisibleQuestions(state).map((question) => question.id);
+      wizardSession.answeredQuestionIds = dedupe(wizardSession.answeredQuestionIds.filter((id) => visibleIds.includes(id)));
+      wizardSession.questionHistory = dedupe(wizardSession.questionHistory.filter((id) => visibleIds.includes(id)));
+      wizardSession.visitedQuestionIds = dedupe(wizardSession.visitedQuestionIds.filter((id) => visibleIds.includes(id)));
+
+      if (wizardSession.currentQuestionId && !visibleIds.includes(wizardSession.currentQuestionId)) {
+        wizardSession.currentQuestionId = null;
+      }
+
+      const currentQuestion = wizardSession.currentQuestionId ? QUESTION_LOOKUP[wizardSession.currentQuestionId] : null;
+      if (!currentQuestion && !wizardSession.currentQuestionId) {
+        wizardSession.currentQuestionId = getNextQuestionId(state);
+      }
+    }
+
+    function hasType2Selection(state) {
+      return Boolean(state.diabetes_type_T2DM);
+    }
+
+    function isType2Case(state) {
+      return hasType2Selection(state) && !state.is_pregnant_or_planning;
+    }
+
+    function getVisibleQuestions(state) {
+      return QUESTION_FLOW.filter((question) => {
+        if (typeof question.visibleIf === "function") {
+          return question.visibleIf(state);
+        }
+        return true;
+      });
+    }
+
+    function getVisibleQuestionIds(state) {
+      return getVisibleQuestions(state).map((question) => question.id);
+    }
+
+    function areAllVisibleQuestionsAnswered(state) {
+      const visibleIds = getVisibleQuestionIds(state);
+      return visibleIds.length > 0 && visibleIds.every((id) => wizardSession.answeredQuestionIds.includes(id));
+    }
+
+    function getFirstVisibleQuestionId(state) {
+      return getVisibleQuestions(state)[0]?.id || null;
+    }
+
+    function getCurrentQuestion(state) {
+      const visibleQuestions = getVisibleQuestions(state);
+      if (!visibleQuestions.length) {
+        return null;
+      }
+
+      if (wizardSession.currentQuestionId) {
+        const explicitQuestion = visibleQuestions.find((question) => question.id === wizardSession.currentQuestionId);
+        if (explicitQuestion) {
+          return explicitQuestion;
+        }
+      }
+
+      const nextQuestion = visibleQuestions.find((question) => !wizardSession.answeredQuestionIds.includes(question.id)) || null;
+      wizardSession.currentQuestionId = nextQuestion ? nextQuestion.id : null;
+      return nextQuestion;
+    }
+
+    function getNextQuestionId(state, fromQuestionId = null, options = {}) {
+      const visibleQuestions = getVisibleQuestions(state);
+      if (!visibleQuestions.length) {
+        return null;
+      }
+
+      const answered = new Set(wizardSession.answeredQuestionIds);
+      const includeAnswered = Boolean(options.includeAnswered);
+      if (fromQuestionId) {
+        const currentIndex = visibleQuestions.findIndex((question) => question.id === fromQuestionId);
+        for (let index = currentIndex + 1; index < visibleQuestions.length; index += 1) {
+          if (includeAnswered || !answered.has(visibleQuestions[index].id)) {
+            return visibleQuestions[index].id;
+          }
+        }
+      }
+
+      if (includeAnswered) {
+        return null;
+      }
+
+      return visibleQuestions.find((question) => !answered.has(question.id))?.id || null;
+    }
+
+    function getNextSequentialQuestionId(state, fromQuestionId) {
+      return getNextQuestionId(state, fromQuestionId, { includeAnswered: true });
+    }
+
+    function getPreviousQuestionId(state) {
+      const visibleQuestions = getVisibleQuestions(state);
+      if (!visibleQuestions.length) {
+        return null;
+      }
+
+      if (!wizardSession.currentQuestionId) {
+        return visibleQuestions[visibleQuestions.length - 1]?.id || null;
+      }
+
+      const currentIndex = visibleQuestions.findIndex((question) => question.id === wizardSession.currentQuestionId);
+      return currentIndex > 0 ? visibleQuestions[currentIndex - 1].id : null;
+    }
+
+    function goToPreviousQuestion() {
+      const previousId = getPreviousQuestionId(latestState);
+      if (!previousId) {
+        return;
+      }
+
+      wizardSession.currentQuestionId = previousId;
+      persistState();
+      renderApplication(latestState);
+    }
+
+    function advanceCurrentQuestion() {
+      const currentQuestion = getCurrentQuestion(latestState);
+      if (!currentQuestion) {
+        switchTab("tab-results");
+        return;
+      }
+
+      const nextState = { ...latestState };
+
+      if (currentQuestion.inputType === "number") {
+        const input = dom.questionInputArea.querySelector("#wizard-number-input");
+        const rawValue = input ? input.value : latestState[currentQuestion.id];
+        applyQuestionAnswer(currentQuestion, nextState, rawValue);
+      } else if (currentQuestion.inputType === "multi") {
+        const selectedMap = {};
+        currentQuestion.options.forEach((option) => {
+          const checkbox = dom.questionInputArea.querySelector(`[data-multi-key="${option.key}"]`);
+          selectedMap[option.key] = Boolean(checkbox?.checked);
+        });
+        applyQuestionAnswer(currentQuestion, nextState, selectedMap);
+      }
+
+      commitQuestionAnswer(currentQuestion, nextState);
+    }
+
+    function applyQuestionAnswer(question, state, value) {
+      if (typeof question.apply === "function") {
+        question.apply(state, value);
+        return;
+      }
+
+      if (question.inputType === "multi") {
+        question.options.forEach((option) => {
+          state[option.key] = Boolean(value[option.key]);
+        });
+        return;
+      }
+
+      if (question.inputType === "number") {
+        if (question.id === "a1c_target_percent" && state.no_a1c_goal && String(value).trim() === "") {
+          return;
+        }
+        const fallback = DEFAULT_STATE[question.id] ?? 0;
+        const parsedValue = question.integerOnly
+          ? toInteger(value, fallback)
+          : toNumber(value, fallback);
+        state[question.id] = clamp(parsedValue, question.min, question.max);
+        if (question.id === "a1c_target_percent") {
+          state.no_a1c_goal = false;
+        }
+        return;
+      }
+
+      if (question.field) {
+        state[question.field] = value;
+        return;
+      }
+
+      state[question.id] = value;
+    }
+
+    function commitQuestionAnswer(question, nextState) {
+      const wasUnlocked = isResultsUnlocked(latestState);
+      const wasAlreadyAnswered = wizardSession.answeredQuestionIds.includes(question.id);
+      latestState = normalizeState(nextState);
+      addUnique(wizardSession.answeredQuestionIds, question.id);
+      addUnique(wizardSession.questionHistory, question.id);
+      addUnique(wizardSession.visitedQuestionIds, question.id);
+      pruneWizardSession(latestState);
+      const isUnlockedNow = isResultsUnlocked(latestState);
+      wizardSession.currentQuestionId = isUnlockedNow && (wasUnlocked || wasAlreadyAnswered)
+        ? getNextSequentialQuestionId(latestState, question.id)
+        : getNextQuestionId(latestState, question.id);
+
+      if (wizardSession.currentQuestionId) {
+        addUnique(wizardSession.visitedQuestionIds, wizardSession.currentQuestionId);
+      }
+
+      persistState();
+      renderApplication(latestState);
+
+      if (wizardSession.currentQuestionId === null &&
+          latestResult?.status === "ok" &&
+          areAllVisibleQuestionsAnswered(latestState)) {
+        switchTab("tab-results");
+      }
+    }
+
+    function getQuestionCurrentValue(question, state) {
+      if (question.id === "route_preference") {
+        if (state.prefers_oral_only) {
+          return "oral_only";
+        }
+        if (state.willing_to_use_injection) {
+          return "injectable";
+        }
+        return "neutral";
+      }
+
+      if (question.inputType === "multi") {
+        return question.options.reduce((accumulator, option) => {
+          accumulator[option.key] = Boolean(state[option.key]);
+          return accumulator;
+        }, {});
+      }
+
+      if (question.field) {
+        return state[question.field];
+      }
+
+      return state[question.id];
+    }
+
+    function getQuestionAnswerSummary(question, state) {
+      const currentValue = getQuestionCurrentValue(question, state);
+
+      if (question.inputType === "choice") {
+        return question.options.find((option) => option.value === currentValue)?.label || "Not answered";
+      }
+
+      if (question.inputType === "number") {
+        if (question.id === "a1c_target_percent" && state.no_a1c_goal) {
+          return "No A1C goal";
+        }
+        return `${currentValue} ${question.suffix || ""}`.trim();
+      }
+
+      if (question.inputType === "multi") {
+        const selected = question.options
+          .filter((option) => currentValue[option.key])
+          .map((option) => option.label);
+        return selected.length ? selected.join(", ") : "None selected";
+      }
+
+      return "Not answered";
+    }
+
+    function renderApplication(state) {
+      const currentQuestion = getCurrentQuestion(state);
+      const result = recommendTherapy(state);
+      latestState = { ...state };
+      latestResult = result;
+      renderResultAccessState(isResultsUnlocked(state));
+      renderFlowchart(state, result, currentQuestion);
+      renderWizard(state, result, currentQuestion);
+      updateCounts(result);
+      renderStatus(result);
+      renderLane("preferred", result.preferred_classes, dom.preferredGrid, state);
+      renderLane("acceptable", result.acceptable_classes, dom.acceptableGrid, state);
+      renderLane("avoid", result.avoid_classes, dom.avoidGrid, state);
+      renderRationale(result);
+      renderFlags(result);
+      renderClinicalInsights(result, state);
+      renderDataQuality(activeEhrProfile);
+      renderPatientEvidence(state, activeEhrProfile);
+      buildCompareSelectors(result, state);
+      renderCompareCards(result, state);
+      queueCenteredActiveStep();
+    }
+
+    function renderWizard(state, result, currentQuestion) {
+      const visibleQuestions = getVisibleQuestions(state);
+      const answeredVisibleIds = visibleQuestions
+        .map((question) => question.id)
+        .filter((id) => wizardSession.answeredQuestionIds.includes(id));
+      const totalQuestions = visibleQuestions.length;
+      const answeredCount = answeredVisibleIds.length;
+      const mappedCount = getDisplayedPathIds(state, currentQuestion).length;
+      const currentQuestionIndex = currentQuestion
+        ? visibleQuestions.findIndex((question) => question.id === currentQuestion.id) + 1
+        : Math.max(totalQuestions, 1);
+      const progressPercent = totalQuestions ? Math.round((answeredCount / totalQuestions) * 100) : 100;
+
+      dom.wizardProgressFill.style.width = `${progressPercent}%`;
+      dom.wizardStepCount.textContent = `${answeredCount} of ${totalQuestions} answered`;
+      dom.wizardPathCount.textContent = `${mappedCount} decision points mapped`;
+
+      if (currentQuestion) {
+        dom.wizardStageLabel.textContent = `${getStageLabel(currentQuestion.stageKey)} branch`;
+        dom.wizardProgressCopy.textContent = `Question ${currentQuestionIndex} of ${totalQuestions}.`;
+      } else if (result.status === "ok") {
+        dom.wizardStageLabel.textContent = "Decision tree complete";
+        dom.wizardProgressCopy.textContent = "The intake path has enough information for a full recommendation board.";
+      } else {
+        dom.wizardStageLabel.textContent = "Decision tree paused";
+        dom.wizardProgressCopy.textContent = result.message;
+      }
+
+      renderQuestionHistory(state, currentQuestion);
+      renderCurrentQuestion(state, result, currentQuestion, currentQuestionIndex, totalQuestions, answeredCount);
+    }
+
+    function renderQuestionHistory(state, currentQuestion) {
+      const pathIds = getDisplayedPathIds(state, currentQuestion);
+
+      if (!pathIds.length) {
+        dom.questionHistoryList.innerHTML = "";
+        return;
+      }
+
+      dom.questionHistoryList.innerHTML = pathIds.map((id, index) => {
+        const question = QUESTION_LOOKUP[id];
+        const answerSummary = getQuestionAnswerSummary(question, state);
+        const isCurrent = currentQuestion?.id === id;
+        return `
+          <article
+            class="question-history-card is-jumpable ${isCurrent ? "is-current" : ""} ${!isCurrent && index === pathIds.length - 1 ? "is-latest" : ""}"
+            data-question-jump="${id}"
+            role="button"
+            tabindex="0"
+            aria-label="Edit answer for ${question.label}">
+            <div class="question-history-topline">
+              <span class="path-index">${index + 1}</span>
+              <span class="question-history-stage">${getStageLabel(question.stageKey)}</span>
+            </div>
+            <div>
+              <strong>${question.label}</strong>
+              <div class="history-answer-badge">${answerSummary}</div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderCurrentQuestion(state, result, question, questionIndex, totalQuestions, answeredCount) {
+      if (!question) {
+        dom.questionCard.classList.add("is-complete");
+        dom.questionCard.classList.remove("is-current");
+        dom.questionStage.textContent = result.status === "ok" ? "Ready to review" : "Needs scope correction";
+        dom.questionTitle.textContent = result.status === "ok"
+          ? "The guided intake is complete."
+          : result.message;
+        dom.questionHelp.textContent = result.status === "ok"
+          ? "The recommendations tab is now unlocked. You can review it or go back to revise earlier answers."
+          : "Use Back to revise the scope answer if you want to continue the type 2 diabetes pathway.";
+        dom.questionInputArea.innerHTML = `${renderScopeNotice(state)}${renderCompletionPreview(result)}`;
+        dom.advanceQuestionBtn.hidden = true;
+        dom.backQuestionBtn.disabled = !getPreviousQuestionId(state);
+        return;
+      }
+
+      dom.questionCard.classList.remove("is-complete");
+      dom.questionCard.classList.add("is-current");
+      dom.questionStage.textContent = `${question.sectionLabel || getStageLabel(question.stageKey)} • Question ${questionIndex} of ${totalQuestions}`;
+      dom.questionTitle.textContent = question.label;
+      dom.questionHelp.textContent = question.help || "Answer this branch point to continue.";
+      dom.questionInputArea.innerHTML = `${renderScopeNotice(state)}${renderQuestionInput(question, state)}`;
+      dom.advanceQuestionBtn.hidden = question.inputType === "choice";
+      dom.advanceQuestionBtn.textContent = "Continue";
+      dom.backQuestionBtn.disabled = !getPreviousQuestionId(state);
+    }
+
+    function renderResultAccessState(isUnlocked) {
+      if (dom.jumpToResultsTopBtn) {
+        dom.jumpToResultsTopBtn.disabled = false;
+        dom.jumpToResultsTopBtn.title = "Open the current recommendation board.";
+      }
+
+      if (dom.resultsTabButton) {
+        dom.resultsTabButton.disabled = false;
+        dom.resultsTabButton.setAttribute("aria-disabled", "false");
+        dom.resultsTabButton.title = "Open the current recommendation board.";
+      }
+    }
+
+    function renderQuestionInput(question, state) {
+      if (question.inputType === "choice") {
+        const currentValue = getQuestionCurrentValue(question, state);
+        return `
+          <div class="choice-grid">
+            ${question.options.map((option, index) => `
+              <button
+                class="answer-choice-btn ${option.value === currentValue ? "is-selected" : ""}"
+                type="button"
+                data-option-index="${index}">
+                ${option.label}
+              </button>
+            `).join("")}
+          </div>
+        `;
+      }
+
+      if (question.inputType === "number") {
+        const currentValue = getQuestionCurrentValue(question, state);
+        const isNoA1cGoal = question.id === "a1c_target_percent" && state.no_a1c_goal;
+        const boundaryMarkup = question.lowLabel || question.highLabel
+          ? `
+            <div class="number-boundary-row" aria-hidden="true">
+              <span>${question.lowLabel || ""}</span>
+              <span>${question.highLabel || ""}</span>
+            </div>
+          `
+          : "";
+        const noGoalMarkup = question.specialAction === "no-a1c-goal"
+          ? `
+            <div class="number-extra-actions">
+              <button
+                class="ghost-btn no-goal-btn ${isNoA1cGoal ? "is-selected" : ""}"
+                type="button"
+                data-question-action="no-a1c-goal">
+                No A1C goal
+              </button>
+            </div>
+          `
+          : "";
+        return `
+          <div class="number-question-shell">
+            <label class="question-field-label" for="wizard-number-input">Enter value</label>
+            <div class="number-input-wrap">
+              <input
+                id="wizard-number-input"
+                type="${question.integerOnly ? "text" : "number"}"
+                min="${question.min}"
+                max="${question.max}"
+                step="${question.step}"
+                ${question.integerOnly ? "inputmode=\"numeric\" pattern=\"[0-9]*\"" : ""}
+                value="${isNoA1cGoal ? "" : currentValue}">
+              <span>${question.suffix || ""}</span>
+            </div>
+            ${boundaryMarkup}
+            ${noGoalMarkup}
+            <p class="question-caption">Use Continue to move to the next decision point.</p>
+          </div>
+        `;
+      }
+
+      const currentValue = getQuestionCurrentValue(question, state);
+      return `
+        <div class="multi-option-grid">
+          ${question.options.map((option) => `
+            <label class="multi-option">
+              <input type="checkbox" data-multi-key="${option.key}" ${currentValue[option.key] ? "checked" : ""}>
+              <span>${option.label}</span>
+            </label>
+          `).join("")}
+        </div>
+        <p class="question-caption">Select all that apply, then continue.</p>
+      `;
+    }
+
+    function renderScopeNotice(state) {
+      const message = getScopeDevelopmentMessage(state);
+      return message ? `<div class="scope-notice">${message}</div>` : "";
+    }
+
+    function getScopeDevelopmentMessage(state) {
+      if (state.is_pregnant_or_planning) {
+        return "Gestational diabetes decision support is currently in development and will be included in a future update. Current functionality is limited to Type 2 diabetes mellitus (T2DM) without pregnancy.";
+      }
+
+      const selectedNonType2Labels = DIABETES_TYPE_OPTIONS
+        .filter((option) => option.key !== "diabetes_type_T2DM" && state[option.key])
+        .map((option) => option.label);
+
+      if (!selectedNonType2Labels.length) {
+        return "";
+      }
+
+      return `Decision support for ${joinLabels(selectedNonType2Labels)} is currently in development and will be included in a future update. Current functionality is limited to Type 2 diabetes mellitus (T2DM).`;
+    }
+
+    function renderCompletionPreview(result) {
+      const preferredPreview = result.preferred_classes.length
+        ? result.preferred_classes.map((classId) => `<span class="pill preferred">${CLASS_META[classId].label}</span>`).join("")
+        : `<span class="pill neutral">No preferred class yet</span>`;
+
+      const acceptablePreview = result.acceptable_classes.length
+        ? result.acceptable_classes.map((classId) => `<span class="pill acceptable">${CLASS_META[classId].label}</span>`).join("")
+        : `<span class="pill neutral">No acceptable class yet</span>`;
+
+      return `
+        <div class="completion-preview">
+          <div class="completion-copy">
+            <strong>Current lane preview</strong>
+            <p>The recommendation tab already reflects everything gathered in the decision tree.</p>
+          </div>
+          <div class="completion-chip-row">${preferredPreview}</div>
+          <div class="completion-chip-row">${acceptablePreview}</div>
+        </div>
+      `;
+    }
+
+    function getStageLabel(stageKey) {
+      return WIZARD_STAGES.find((stage) => stage.key === stageKey)?.label || "Decision";
+    }
+
+    function getDisplayedPathIds(state, currentQuestion) {
+      const visibleIds = new Set(getVisibleQuestions(state).map((question) => question.id));
+      const orderedIds = [
+        ...wizardSession.questionHistory,
+        ...wizardSession.answeredQuestionIds,
+        ...wizardSession.visitedQuestionIds
+      ];
+
+      return dedupe(orderedIds).filter((id) => visibleIds.has(id));
+    }
+
+    function queueCenteredActiveStep() {
+      requestAnimationFrame(() => {
+        if (wizardSession.questionHistory.length) {
+          centerElementInContainer(dom.questionCard, dom.questionScrollShell);
+        } else {
+          dom.questionScrollShell.scrollTo({
+            top: 0,
+            behavior: "smooth"
+          });
+        }
+        const activeFlowNode = document.getElementById("current-flow-node") || document.getElementById("flow-complete-node");
+        centerElementInContainer(activeFlowNode, dom.flowchartViewport);
+      });
+    }
+
+    function centerElementInContainer(element, container) {
+      if (!element || !container) {
+        return;
+      }
+
+      const targetTop = element.offsetTop - (container.clientHeight / 2) + (element.clientHeight / 2);
+      container.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: "smooth"
+      });
+    }
+
+    function switchTab(tabId) {
+      if (tabId === "tab-results" && !isResultsUnlocked()) {
+        return;
+      }
+
+      dom.tabButtons.forEach((button) => {
+        const isActive = button.dataset.tabTarget === tabId;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-selected", String(isActive));
+        button.tabIndex = isActive ? 0 : -1;
+      });
+
+      dom.tabPanels.forEach((panel) => {
+        const isActive = panel.id === tabId;
+        panel.hidden = !isActive;
+        panel.classList.toggle("is-active", isActive);
+      });
+    }
+
+    function isResultsUnlocked(state = latestState) {
+      return true;
+    }
+
+    function renderFlowchart(state, result, currentQuestion) {
+      const pathIds = getDisplayedPathIds(state, currentQuestion);
+      const pathMarkup = [];
+
+      if (!pathIds.length) {
+        pathMarkup.push(`
+          <article class="flow-path-node flow-path-node-start">
+            <span class="flow-kicker">Start</span>
+            <h3>Simplified ADA intake pathway</h3>
+            <p>The flow follows the live decision path created by the user's answers.</p>
+          </article>
+        `);
+
+        if (currentQuestion) {
+          pathMarkup.push(renderFlowConnector("Begin"));
+        }
+      }
+
+      pathIds.forEach((id, index) => {
+        const question = QUESTION_LOOKUP[id];
+        const answerSummary = getQuestionAnswerSummary(question, state);
+        const isCurrent = currentQuestion?.id === id;
+        pathMarkup.push(`
+          <article
+            class="flow-path-node is-answered ${isCurrent ? "is-current" : "is-jumpable"}"
+            ${isCurrent ? "id=\"current-flow-node\"" : ""}
+            data-question-jump="${id}"
+            role="button"
+            tabindex="0"
+            aria-label="Edit answer for ${question.label}">
+            <span class="flow-kicker">${getStageLabel(question.stageKey)}</span>
+            <h3>${question.label}</h3>
+            <div class="flow-node-answer">${answerSummary}</div>
+          </article>
+        `);
+
+        const hasNextNode = index < pathIds.length - 1 || Boolean(currentQuestion && !pathIds.includes(currentQuestion.id));
+        if (hasNextNode) {
+          pathMarkup.push(renderFlowConnector(answerSummary));
+        }
+      });
+
+      if (currentQuestion && !pathIds.includes(currentQuestion.id)) {
+        pathMarkup.push(`
+          <article class="flow-path-node is-current" id="current-flow-node">
+            <span class="flow-kicker">${getStageLabel(currentQuestion.stageKey)}</span>
+            <h3>${currentQuestion.label}</h3>
+            <p>${currentQuestion.help || "Answer this branch point to continue the pathway."}</p>
+          </article>
+        `);
+      } else if (!currentQuestion || areAllVisibleQuestionsAnswered(state)) {
+        const completeTone = result.status === "ok" ? "is-complete" : "is-warning";
+        pathMarkup.push(renderFlowConnector(result.status === "ok" ? "Path complete" : "Needs correction"));
+        pathMarkup.push(`
+          <article class="flow-path-node ${completeTone}" id="flow-complete-node">
+            <span class="flow-kicker">${result.status === "ok" ? "Recommendation ready" : "Scope issue"}</span>
+            <h3>${result.status === "ok" ? "Decision tree complete" : "Pathway paused"}</h3>
+            <p>${result.status === "ok"
+              ? `${result.preferred_classes.length} preferred, ${result.acceptable_classes.length} acceptable, ${result.avoid_classes.length} avoid.`
+              : result.message}</p>
+          </article>
+        `);
+      }
+
+      dom.flowchartCanvas.innerHTML = pathMarkup.join("");
+    }
+
+    function renderFlowConnector(label) {
+      return `
+        <div class="flow-connector">
+          <div class="flow-line"></div>
+        </div>
+      `;
+    }
+
+    function recommendTherapy(inputs) {
+      const scopeDevelopmentMessage = getScopeDevelopmentMessage(inputs);
+
+      if (inputs.diabetes_type === "NA") {
+        return {
+          status: "error",
+          message: "Diabetes type is required before the simplified algorithm can run.",
+          preferred_classes: [],
+          acceptable_classes: [],
+          avoid_classes: [],
+          rationale: [],
+          derived_flags: {}
+        };
+      }
+
+      if (inputs.is_pregnant_or_planning) {
+        return {
+          status: "redirect",
+          message: scopeDevelopmentMessage,
+          preferred_classes: [],
+          acceptable_classes: [],
+          avoid_classes: [],
+          rationale: [],
+          derived_flags: {}
+        };
+      }
+
+      if (!inputs.diabetes_type_T2DM) {
+        return {
+          status: "redirect",
+          message: scopeDevelopmentMessage || "Current functionality is limited to Type 2 diabetes mellitus (T2DM).",
+          preferred_classes: [],
+          acceptable_classes: [],
+          avoid_classes: [],
+          rationale: [],
+          derived_flags: {}
+        };
+      }
+
+      const preferred_classes = [];
+      const acceptable_classes = [];
+      const avoid_classes = [];
+      const rationale = [];
+
+      const a1c_gap = inputs.no_a1c_goal ? null : roundToOne(inputs.a1c_current_percent - inputs.a1c_target_percent);
+      const above_a1c_goal = !inputs.no_a1c_goal && inputs.a1c_current_percent > inputs.a1c_target_percent;
+      const severe_hyperglycemia =
+        Boolean(inputs.symptomatic_hyperglycemia) ||
+        Boolean(inputs.catabolic_features_present) ||
+        inputs.a1c_current_percent > 10.0;
+
+      const has_cardiorenal_driver =
+        Boolean(inputs.has_established_ASCVD) ||
+        Boolean(inputs.has_indicators_high_CVD_risk) ||
+        Boolean(inputs.has_HF) ||
+        inputs.egfr_ml_min_1_73m2 < 60 ||
+        Boolean(inputs.albuminuria_present);
+
+      const has_CKD = inputs.egfr_ml_min_1_73m2 < 60 || Boolean(inputs.albuminuria_present);
+      const advanced_CKD = inputs.egfr_ml_min_1_73m2 < 30;
+      const SGLT2_low_glycemic_effect = inputs.egfr_ml_min_1_73m2 < 45;
+
+      if (inputs.metformin_contraindicated) {
+        addUnique(avoid_classes, "metformin");
+      }
+
+      if (inputs.SGLT2i_contraindicated) {
+        addUnique(avoid_classes, "SGLT2i");
+      }
+
+      if (inputs.GLP1_RA_contraindicated) {
+        addUnique(avoid_classes, "GLP1_RA");
+      }
+
+      if (inputs.dual_GIP_GLP1_RA_contraindicated) {
+        addUnique(avoid_classes, "dual_GIP_GLP1_RA");
+      }
+
+      if (inputs.pioglitazone_contraindicated) {
+        addUnique(avoid_classes, "pioglitazone");
+      }
+
+      if (inputs.dpp4i_contraindicated) {
+        addUnique(avoid_classes, "DPP4i");
+      }
+
+      if (inputs.sulfonylurea_contraindicated) {
+        addUnique(avoid_classes, "sulfonylurea");
+      }
+
+      if (inputs.basal_insulin_contraindicated) {
+        addUnique(avoid_classes, "basal_insulin");
+      }
+
+      if (severe_hyperglycemia) {
+        addUnique(preferred_classes, "basal_insulin");
+        addUnique(rationale, "urgent glycemic control / severe hyperglycemia");
+
+        if (inputs.willing_to_use_injection) {
+          if (!inputs.on_GLP1_RA && !inputs.on_dual_GIP_GLP1_RA) {
+            addUnique(acceptable_classes, "GLP1_RA");
+          }
+
+          if (!inputs.on_GLP1_RA &&
+              !inputs.on_dual_GIP_GLP1_RA &&
+              (inputs.prioritize_weight_loss || inputs.has_obesity)) {
+            addUnique(acceptable_classes, "dual_GIP_GLP1_RA");
+          }
+        }
+      }
+
+      if (inputs.has_established_ASCVD || inputs.has_indicators_high_CVD_risk) {
+        addUnique(rationale, "ASCVD/high CV risk present");
+
+        if (!inputs.on_GLP1_RA) {
+          addUnique(preferred_classes, "GLP1_RA");
+        }
+
+        if (!inputs.on_SGLT2i) {
+          addUnique(preferred_classes, "SGLT2i");
+        }
+      }
+
+      if (inputs.has_HF) {
+        addUnique(rationale, "HF present");
+
+        if (!inputs.on_SGLT2i) {
+          addUnique(preferred_classes, "SGLT2i");
+        }
+
+        if (inputs.HF_type === "HFpEF" && inputs.HF_symptomatic && inputs.has_obesity) {
+          addUnique(rationale, "symptomatic HFpEF with obesity");
+
+          if (!inputs.on_dual_GIP_GLP1_RA) {
+            addUnique(acceptable_classes, "dual_GIP_GLP1_RA");
+          } else if (!inputs.on_GLP1_RA) {
+            addUnique(acceptable_classes, "GLP1_RA");
+          }
+        }
+      }
+
+      if (has_CKD) {
+        addUnique(rationale, "CKD present");
+
+        if (advanced_CKD) {
+          if (!inputs.on_GLP1_RA) {
+            addUnique(preferred_classes, "GLP1_RA");
+          }
+        } else {
+          if (!inputs.on_SGLT2i) {
+            addUnique(preferred_classes, "SGLT2i");
+          }
+
+          if (!inputs.on_GLP1_RA) {
+            addUnique(acceptable_classes, "GLP1_RA");
+          }
+        }
+      }
+
+      if (inputs.has_obesity || inputs.weight_loss_goal_priority || inputs.prioritize_weight_loss) {
+        addUnique(rationale, "weight or metabolic consideration present");
+
+        if (!inputs.on_dual_GIP_GLP1_RA) {
+          addUnique(preferred_classes, "dual_GIP_GLP1_RA");
+        } else if (!inputs.on_GLP1_RA) {
+          addUnique(preferred_classes, "GLP1_RA");
+        } else if (!inputs.on_SGLT2i) {
+          addUnique(acceptable_classes, "SGLT2i");
+        }
+      }
+
+      if (inputs.has_MASH || inputs.high_risk_liver_fibrosis) {
+        addUnique(rationale, "MASH / fibrosis risk present");
+
+        if (!inputs.on_GLP1_RA) {
+          addUnique(preferred_classes, "GLP1_RA");
+        } else if (!inputs.on_dual_GIP_GLP1_RA) {
+          addUnique(acceptable_classes, "dual_GIP_GLP1_RA");
+        } else {
+          addUnique(acceptable_classes, "pioglitazone");
+        }
+      } else if (inputs.has_MASLD) {
+        addUnique(rationale, "MASLD present");
+
+        if (!inputs.on_GLP1_RA) {
+          addUnique(acceptable_classes, "GLP1_RA");
+        }
+
+        if (!inputs.on_dual_GIP_GLP1_RA) {
+          addUnique(acceptable_classes, "dual_GIP_GLP1_RA");
+        }
+
+        addUnique(acceptable_classes, "pioglitazone");
+      }
+
+      if (inputs.no_a1c_goal) {
+        addUnique(rationale, "no A1C goal selected");
+      }
+
+      if (above_a1c_goal) {
+        addUnique(rationale, "glycemia above target");
+
+        if (!inputs.on_metformin) {
+          addUnique(preferred_classes, "metformin");
+        }
+
+        if (a1c_gap >= 1.5) {
+          addUnique(rationale, "A1C >=1.5% above target");
+
+          if (!inputs.on_dual_GIP_GLP1_RA && inputs.willing_to_use_injection) {
+            addUnique(preferred_classes, "dual_GIP_GLP1_RA");
+          } else if (!inputs.on_GLP1_RA && inputs.willing_to_use_injection) {
+            addUnique(preferred_classes, "GLP1_RA");
+          } else if (!inputs.on_SGLT2i) {
+            addUnique(acceptable_classes, "SGLT2i");
+          }
+        }
+      }
+
+      if (inputs.high_hypoglycemia_risk || inputs.prioritize_hypoglycemia_avoidance) {
+        addUnique(rationale, "hypoglycemia avoidance prioritized");
+
+        moveUpIfPresent("metformin", preferred_classes, acceptable_classes);
+        moveUpIfPresent("SGLT2i", preferred_classes, acceptable_classes);
+        moveUpIfPresent("GLP1_RA", preferred_classes, acceptable_classes);
+        moveUpIfPresent("dual_GIP_GLP1_RA", preferred_classes, acceptable_classes);
+        removeIfPresent("sulfonylurea", preferred_classes);
+        removeIfPresent("sulfonylurea", acceptable_classes);
+
+        if (!severe_hyperglycemia) {
+          moveDownIfPresent("basal_insulin", preferred_classes, acceptable_classes);
+        }
+      }
+
+      if (inputs.cost_barrier_present) {
+        addUnique(rationale, "cost barrier present");
+
+        moveUpIfPresent("metformin", preferred_classes, acceptable_classes);
+        addUnique(acceptable_classes, "pioglitazone");
+        if (!inputs.on_sulfonylurea &&
+            !inputs.high_hypoglycemia_risk &&
+            !inputs.prioritize_hypoglycemia_avoidance) {
+          addUnique(acceptable_classes, "sulfonylurea");
+        }
+
+        if (!has_cardiorenal_driver) {
+          moveDownIfPresent("GLP1_RA", preferred_classes, acceptable_classes);
+          moveDownIfPresent("dual_GIP_GLP1_RA", preferred_classes, acceptable_classes);
+          moveDownIfPresent("SGLT2i", preferred_classes, acceptable_classes);
+        }
+      }
+
+      if (inputs.prefers_oral_only) {
+        addUnique(rationale, "oral-only preference");
+
+        moveDownIfPresent("GLP1_RA", preferred_classes, acceptable_classes);
+        moveDownIfPresent("dual_GIP_GLP1_RA", preferred_classes, acceptable_classes);
+
+        if (!severe_hyperglycemia) {
+          moveDownIfPresent("basal_insulin", preferred_classes, acceptable_classes);
+        }
+
+        addUnique(preferred_classes, "metformin");
+        addUnique(acceptable_classes, "SGLT2i");
+        addUnique(acceptable_classes, "pioglitazone");
+
+        if (!inputs.on_DPP4i && !inputs.on_GLP1_RA && !inputs.on_dual_GIP_GLP1_RA) {
+          addUnique(acceptable_classes, "DPP4i");
+        }
+
+        if (!inputs.on_sulfonylurea &&
+            !inputs.high_hypoglycemia_risk &&
+            !inputs.prioritize_hypoglycemia_avoidance) {
+          addUnique(acceptable_classes, "sulfonylurea");
+        }
+      }
+
+      if (inputs.on_GLP1_RA || inputs.on_dual_GIP_GLP1_RA) {
+        removeIfPresent("DPP4i", preferred_classes);
+        removeIfPresent("DPP4i", acceptable_classes);
+        addUnique(rationale, "avoid DPP-4i with GLP-1-based therapy");
+      }
+
+      if (SGLT2_low_glycemic_effect) {
+        addUnique(rationale, "SGLT2 glycemic efficacy reduced at lower eGFR");
+      }
+
+      if (advanced_CKD) {
+        moveDownIfPresent("metformin", preferred_classes, acceptable_classes);
+      }
+
+      const currentClasses = [];
+      if (inputs.on_metformin) currentClasses.push("metformin");
+      if (inputs.on_SGLT2i) currentClasses.push("SGLT2i");
+      if (inputs.on_GLP1_RA) currentClasses.push("GLP1_RA");
+      if (inputs.on_dual_GIP_GLP1_RA) currentClasses.push("dual_GIP_GLP1_RA");
+      if (inputs.on_DPP4i) currentClasses.push("DPP4i");
+      if (inputs.on_sulfonylurea) currentClasses.push("sulfonylurea");
+      if (inputs.on_basal_insulin) currentClasses.push("basal_insulin");
+
+      currentClasses.forEach((classId) => {
+        removeIfPresent(classId, preferred_classes);
+        removeIfPresent(classId, acceptable_classes);
+      });
+
+      const preferred = dedupe(preferred_classes);
+      const acceptable = dedupe(acceptable_classes);
+      const avoid = dedupe(avoid_classes);
+
+      avoid.forEach((classId) => {
+        removeIfPresent(classId, preferred);
+        removeIfPresent(classId, acceptable);
+      });
+
+      if (preferred.length === 0 && acceptable.length === 0) {
+        if (!inputs.on_metformin) {
+          preferred.push("metformin");
+        } else if (!inputs.on_SGLT2i) {
+          preferred.push("SGLT2i");
+        } else if (!inputs.on_GLP1_RA && !inputs.prefers_oral_only) {
+          preferred.push("GLP1_RA");
+        } else if ((inputs.cost_barrier_present || inputs.prefers_oral_only) &&
+                   !inputs.on_sulfonylurea &&
+                   !inputs.high_hypoglycemia_risk &&
+                   !inputs.prioritize_hypoglycemia_avoidance) {
+          acceptable.push("sulfonylurea");
+        } else {
+          addUnique(rationale, "needs manual clinical review");
+        }
+      }
+
+      const derived_flags = {
+        a1c_gap,
+        no_a1c_goal: Boolean(inputs.no_a1c_goal),
+        above_a1c_goal,
+        severe_hyperglycemia,
+        has_cardiorenal_driver,
+        has_CKD,
+        advanced_CKD,
+        SGLT2_low_glycemic_effect,
+        marked_random_glucose_elevation: Number.isFinite(inputs.random_glucose_mg_dl) && inputs.random_glucose_mg_dl >= 300,
+        marked_fasting_glucose_elevation: inputs.fasting_glucose_mg_dl >= 250,
+        marked_postprandial_glucose_elevation: inputs.postprandial_glucose_mg_dl >= 300,
+        scopeDevelopmentMessage
+      };
+
+      return {
+        status: "ok",
+        message: scopeDevelopmentMessage || "Algorithm completed for type 2 diabetes.",
+        preferred_classes: preferred,
+        acceptable_classes: acceptable,
+        avoid_classes: avoid,
+        rationale: dedupe(rationale),
+        derived_flags
+      };
+    }
+
+    function updateCounts(result) {
+      dom.preferredCount.textContent = result.preferred_classes.length;
+      dom.acceptableCount.textContent = result.acceptable_classes.length;
+      dom.avoidCount.textContent = result.avoid_classes.length;
+    }
+
+    function renderStatus(result) {
+      let tone = "ok";
+      let title = "Recommendation ready";
+      let message = result.message;
+
+      if (result.status === "redirect") {
+        tone = "warning";
+        title = "Out of scope";
+      } else if (result.status === "error") {
+        tone = "danger";
+        title = "Cannot run algorithm";
+      } else if (result.derived_flags?.scopeDevelopmentMessage) {
+        tone = "warning";
+        title = "Limited scope";
+        message = result.derived_flags.scopeDevelopmentMessage;
+      } else if (result.derived_flags?.severe_hyperglycemia) {
+        tone = "warning";
+        title = "Urgent branch triggered";
+        message = "Severe hyperglycemia criteria are present, so basal insulin rises to the top of the board.";
+      }
+
+      dom.statusBanner.dataset.tone = tone;
+      dom.statusBanner.innerHTML = `
+        <strong>${title}</strong>
+        <p>${message}</p>
+      `;
+    }
+
+    function renderLane(lane, classIds, container, state) {
+      if (!classIds.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            No classes are currently listed in this lane for the entered profile.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = classIds
+        .map((classId, index) => renderClassCard(classId, lane, state, index))
+        .join("");
+    }
+
+    function renderClassCard(classId, lane, state, rank = 0) {
+      const meta = CLASS_META[classId];
+      const drugs = groupedDrugs[classId] || [];
+      const availableDrugs = drugs.filter((drug) => getDrugConflicts(drug, state).length === 0);
+      const routeSummary = summariseValueList(drugs.map((drug) => prettifyValue(drug.route)));
+      const costSummary = summariseValueList(drugs.map((drug) => prettifyValue(drug.rough_cost_level)));
+      const justification = getClassPatientJustification(classId, lane, state, latestResult);
+
+      return `
+        <article class="class-card">
+          <header>
+            <div>
+              <h4>${meta.label}</h4>
+              <p>${meta.description}</p>
+            </div>
+            <div class="chip-row">
+              <span class="pill neutral">Priority ${rank + 1}</span>
+              <span class="pill ${lane}">${lane}</span>
+            </div>
+          </header>
+          <div class="class-meta">
+            <span class="pill neutral">Route: ${routeSummary}</span>
+            <span class="pill neutral">Cost: ${costSummary}</span>
+            <span class="pill neutral">${availableDrugs.length}/${drugs.length} example drugs clear profile conflicts</span>
+          </div>
+          <div class="class-justification">
+            <strong>Patient-specific rationale</strong>
+            <p>${justification}</p>
+          </div>
+          <ul class="class-list">
+            ${drugs.map((drug) => {
+              const conflicts = getDrugConflicts(drug, state);
+              return `
+                <li>
+                  <span>${titleCase(drug.drug_name)}</span>
+                  <small>${conflicts.length ? "Profile conflict" : "Available example"}</small>
+                </li>
+              `;
+            }).join("")}
+          </ul>
+        </article>
+      `;
+    }
+
+    function renderRationale(result) {
+      if (!result.rationale.length) {
+        dom.rationaleRow.innerHTML = `<span class="pill neutral">No rationale tags yet</span>`;
+        return;
+      }
+
+      dom.rationaleRow.innerHTML = result.rationale
+        .map((item) => `<span class="pill neutral">${item}</span>`)
+        .join("");
+    }
+
+    function renderFlags(result) {
+      const flags = [];
+      const derived = result.derived_flags || {};
+
+      if (derived.no_a1c_goal) {
+        flags.push("No A1C goal selected");
+      } else if (derived.a1c_gap !== undefined && derived.a1c_gap !== null) {
+        flags.push(`A1C gap: ${formatGap(derived.a1c_gap)}%`);
+      }
+      if (derived.above_a1c_goal) flags.push("Above A1C goal");
+      if (derived.severe_hyperglycemia) flags.push("Severe hyperglycemia");
+      if (derived.marked_random_glucose_elevation) flags.push("Marked random glucose elevation");
+      if (derived.marked_fasting_glucose_elevation) flags.push("Marked fasting glucose elevation");
+      if (derived.marked_postprandial_glucose_elevation) flags.push("Marked postprandial glucose elevation");
+      if (derived.has_cardiorenal_driver) flags.push("Cardiorenal driver present");
+      if (derived.has_CKD) flags.push("CKD present");
+      if (derived.advanced_CKD) flags.push("Advanced CKD");
+      if (derived.SGLT2_low_glycemic_effect) flags.push("Reduced glycemic effect for SGLT2 at this eGFR");
+
+      dom.flagRow.innerHTML = flags.length
+        ? flags.map((item) => `<span class="pill neutral">${item}</span>`).join("")
+        : `<span class="pill neutral">No derived flags triggered yet</span>`;
+    }
+
+    function renderClinicalInsights(result, state) {
+      const insights = buildClinicalInsights(result, state);
+
+      dom.clinicalInsightList.innerHTML = insights.length
+        ? insights.map((insight) => `
+          <div class="clinical-insight">
+            <strong>${escapeHtml(insight.title)}</strong>
+            ${escapeHtml(insight.detail)}
+          </div>
+        `).join("")
+        : `<div class="clinical-insight"><strong>No urgent insights</strong>No high-priority insight is triggered by the current profile.</div>`;
+    }
+
+    function renderDataQuality(profile) {
+      const quality = profile.quality;
+      const status = quality.status || "partial";
+      const statusLabel = titleCase(status);
+
+      if (dom.dataCompletenessSummary) {
+        dom.dataCompletenessSummary.textContent = statusLabel;
+        dom.dataCompletenessSummary.dataset.status = status;
+      }
+
+      const issues = [
+        ...quality.missing.map((item) => ({ ...item, category: "Missing data", tone: item.critical ? "danger" : "warning" })),
+        ...quality.outdated.map((item) => ({ ...item, category: "Outdated lab", tone: "warning" })),
+        ...quality.conflicts.map((item) => ({ ...item, category: "Conflicting data", tone: "danger" }))
+      ];
+
+      if (!issues.length) {
+        dom.dataQualityList.innerHTML = `
+          <div class="data-quality-item">
+            <strong>Complete</strong>
+            Required demographics, diagnoses, medications, vitals, and labs were available in ${escapeHtml(profile.sourceLabel || "the EHR extract")}.
+          </div>
+        `;
+        return;
+      }
+
+      dom.dataQualityList.innerHTML = `
+        <div class="data-quality-item">
+          <strong>Source</strong>
+          ${escapeHtml(profile.sourceLabel || "Uploaded EHR JSON")}
+        </div>
+        ${issues.map((issue) => `
+        <div class="data-quality-item" data-tone="${issue.tone}">
+          <strong>${escapeHtml(issue.category)}</strong>
+          ${escapeHtml(issue.label)}${issue.detail ? `: ${escapeHtml(issue.detail)}` : ""}
+        </div>
+      `).join("")}
+      `;
+    }
+
+    function renderPatientEvidence(state, profile) {
+      const evidence = buildPatientEvidence(state, profile.raw);
+
+      dom.patientEvidenceGrid.innerHTML = evidence.map((item) => `
+        <div class="patient-evidence-item">
+          <strong>${escapeHtml(item.label)}</strong>
+          ${escapeHtml(item.value)}
+        </div>
+      `).join("");
+    }
+
+    function buildClinicalInsights(result, state) {
+      const derived = result.derived_flags || {};
+      const insights = [];
+
+      if (derived.severe_hyperglycemia) {
+        insights.push({
+          title: "Patient meets criteria for insulin initiation",
+          detail: "A1C is at least 10%, symptomatic hyperglycemia is present, or catabolic features were detected."
+        });
+      }
+
+      if (state.has_HF || derived.has_CKD) {
+        const drivers = [];
+        if (state.has_HF) drivers.push("HF");
+        if (derived.has_CKD) drivers.push("CKD");
+        insights.push({
+          title: "SGLT2 inhibitor indicated due to HF/CKD",
+          detail: `${drivers.join(" and ")} present in the EHR-mapped profile.`
+        });
+      }
+
+      if (state.high_hypoglycemia_risk || state.prioritize_hypoglycemia_avoidance) {
+        insights.push({
+          title: "High hypoglycemia risk detected",
+          detail: "The recommendation logic prioritizes lower-hypoglycemia classes and de-emphasizes sulfonylurea or insulin when possible."
+        });
+      }
+
+      if (state.has_established_ASCVD || state.has_indicators_high_CVD_risk) {
+        insights.push({
+          title: "ASCVD/high-risk branch active",
+          detail: "GLP-1 RA and SGLT2 inhibitor classes are prioritized for cardiorenal benefit."
+        });
+      }
+
+      return insights;
+    }
+
+    function buildPatientEvidence(state, data) {
+      const labs = data?.labs || {};
+      const conditions = data?.conditions || {};
+      const heartFailure = conditions.heart_failure || {};
+      const ckd = conditions.ckd || {};
+      const currentMedications = data?.medications?.current_drugs?.length
+        ? data.medications.current_drugs
+            .map((drug) => `${titleCase(drug.name)} ${drug.dose || ""} ${drug.frequency || ""}`.trim())
+            .join(", ")
+        : summariseValueList(data?.medications?.current_classes || []);
+
+      const diabetesTypes = DIABETES_TYPE_OPTIONS
+        .filter((option) => state[option.key])
+        .map((option) => option.label)
+        .join(", ") || "Not documented";
+
+      return [
+        {
+          label: "Demographics",
+          value: `${state.patient_age_years} years, ${prettifyValue(state.patient_sex)}`
+        },
+        {
+          label: "Diabetes diagnosis",
+          value: diabetesTypes
+        },
+        {
+          label: "A1C",
+          value: formatLabEvidence(labs.a1c, "%", state.a1c_current_percent)
+        },
+        {
+          label: "Random glucose",
+          value: formatLabEvidence(labs.random_glucose, "mg/dL", state.random_glucose_mg_dl)
+        },
+        {
+          label: "ASCVD",
+          value: state.has_ASCVD_or_high_risk ? "Present or high risk" : "Not documented"
+        },
+        {
+          label: "Heart failure",
+          value: state.has_HF
+            ? `${heartFailure.type || state.HF_type || "Type not specified"}${state.HF_symptomatic ? ", symptomatic" : ""}`
+            : "Not documented"
+        },
+        {
+          label: "Kidney function",
+          value: `eGFR ${formatLabEvidence(labs.egfr, "mL/min/1.73 m2", state.egfr_ml_min_1_73m2)}`
+        },
+        {
+          label: "Albuminuria",
+          value: state.albuminuria_present
+            ? `Present${labs.uacr?.value ? `, UACR ${formatLabEvidence(labs.uacr, labs.uacr.unit || "mg/g", labs.uacr.value)}` : ""}`
+            : "Not documented"
+        },
+        {
+          label: "Weight/BMI",
+          value: `${state.weight_kg ? `${state.weight_kg} kg, ` : ""}BMI ${state.bmi}`
+        },
+        {
+          label: "Current therapy",
+          value: currentMedications || "No active glucose-lowering medication documented"
+        }
+      ];
+    }
+
+    function getClassPatientJustification(classId, lane, state, result) {
+      const derived = result?.derived_flags || {};
+      const details = [];
+
+      if (classId === "basal_insulin" && derived.severe_hyperglycemia) {
+        details.push(`Meets urgent glycemic criteria with A1C ${state.a1c_current_percent}%${state.symptomatic_hyperglycemia ? " and symptoms" : ""}.`);
+      }
+
+      if (classId === "SGLT2i") {
+        if (state.has_HF) details.push(`Heart failure is documented${state.HF_type !== "NA" ? ` (${state.HF_type})` : ""}.`);
+        if (derived.has_CKD) details.push(`CKD/albuminuria branch is active with eGFR ${state.egfr_ml_min_1_73m2}.`);
+        if (state.has_ASCVD_or_high_risk) details.push("ASCVD/high cardiovascular risk is present.");
+      }
+
+      if (classId === "GLP1_RA") {
+        if (state.has_ASCVD_or_high_risk) details.push("ASCVD/high cardiovascular risk is present.");
+        if (state.has_MASH || state.high_risk_liver_fibrosis) details.push("MASH or high liver fibrosis risk is documented.");
+        if (derived.has_CKD) details.push("CKD branch makes GLP-1 RA a reasonable cardiorenal alternative.");
+      }
+
+      if (classId === "dual_GIP_GLP1_RA") {
+        if (state.has_obesity || state.weight_loss_goal_priority || state.prioritize_weight_loss) {
+          details.push(`Weight/metabolic branch is active with BMI ${state.bmi}.`);
+        }
+        if (derived.a1c_gap !== null && derived.a1c_gap >= 1.5) {
+          details.push(`A1C is ${formatGap(derived.a1c_gap)}% above target.`);
+        }
+      }
+
+      if (classId === "metformin") {
+        if (derived.above_a1c_goal) details.push(`A1C ${state.a1c_current_percent}% remains above target.`);
+        details.push("Foundational oral therapy remains available unless already used or contraindicated.");
+      }
+
+      if (classId === "pioglitazone") {
+        if (state.has_MASLD || state.has_MASH) details.push("Liver/metabolic branch supports considering pioglitazone as an alternative.");
+        if (state.cost_barrier_present || state.prefers_oral_only) details.push("Oral lower-cost fallback logic is active.");
+      }
+
+      if (classId === "DPP4i") {
+        details.push("Oral, weight-neutral fallback when GLP-1-based therapy is not already active.");
+      }
+
+      if (classId === "sulfonylurea") {
+        details.push("Lower-cost fallback only when hypoglycemia risk does not dominate the profile.");
+      }
+
+      if (!details.length) {
+        details.push(`${titleCase(lane)} lane after contraindications, current therapies, and cleanup rules were applied.`);
+      }
+
+      return details.slice(0, 2).join(" ");
+    }
+
+    function buildCompareSelectors(result, state) {
+      const optionGroups = [
+        { label: "Preferred lane", ids: result.preferred_classes },
+        { label: "Acceptable lane", ids: result.acceptable_classes },
+        { label: "Avoid lane", ids: result.avoid_classes }
+      ];
+
+      const rendered = [];
+      const usedDrugNames = new Set();
+
+      optionGroups.forEach((group) => {
+        const options = group.ids
+          .flatMap((classId) => (groupedDrugs[classId] || []).map((drug) => ({ drug, classId })))
+          .filter(({ drug }) => {
+            if (usedDrugNames.has(drug.drug_name)) {
+              return false;
+            }
+            usedDrugNames.add(drug.drug_name);
+            return true;
+          })
+          .map(({ drug, classId }) =>
+            `<option value="${drug.drug_name}">${group.label} • ${titleCase(drug.drug_name)} (${CLASS_META[classId].label})</option>`)
+          .join("");
+
+        if (options) {
+          rendered.push(`<optgroup label="${group.label}">${options}</optgroup>`);
+        }
+      });
+
+      const leftovers = DRUG_DATA.drugs
+        .filter((drug) => !usedDrugNames.has(drug.drug_name))
+        .map((drug) => {
+          const classId = mapDrugClassToId(drug.drug_class);
+          return `<option value="${drug.drug_name}">Other • ${titleCase(drug.drug_name)} (${CLASS_META[classId].label})</option>`;
+        })
+        .join("");
+
+      if (leftovers) {
+        rendered.push(`<optgroup label="Other catalog drugs">${leftovers}</optgroup>`);
+      }
+
+      dom.compareLeft.innerHTML = rendered.join("");
+      dom.compareRight.innerHTML = rendered.join("");
+
+      const recommendedDrugNames = [
+        ...result.preferred_classes.flatMap((classId) => (groupedDrugs[classId] || []).map((drug) => drug.drug_name)),
+        ...result.acceptable_classes.flatMap((classId) => (groupedDrugs[classId] || []).map((drug) => drug.drug_name)),
+        ...result.avoid_classes.flatMap((classId) => (groupedDrugs[classId] || []).map((drug) => drug.drug_name)),
+        ...DRUG_DATA.drugs.map((drug) => drug.drug_name)
+      ].filter((value, index, array) => array.indexOf(value) === index);
+
+      const leftFallback = recommendedDrugNames[0] || "";
+      const rightFallback = recommendedDrugNames.find((name) => name !== leftFallback) || leftFallback;
+
+      if (!recommendedDrugNames.includes(compareState.left)) {
+        compareState.left = leftFallback;
+      }
+
+      if (!recommendedDrugNames.includes(compareState.right) || compareState.right === compareState.left) {
+        compareState.right = rightFallback;
+      }
+
+      dom.compareLeft.value = compareState.left;
+      dom.compareRight.value = compareState.right;
+    }
+
+    function renderCompareCards(result, state) {
+      renderDrugCard(findDrug(compareState.left), dom.compareLeftCard, result, state);
+      renderDrugCard(findDrug(compareState.right), dom.compareRightCard, result, state);
+    }
+
+    function renderDrugCard(drug, container, result, state) {
+      if (!drug) {
+        container.innerHTML = `
+          <div class="empty-state">Select a drug to compare.</div>
+        `;
+        return;
+      }
+
+      const classId = mapDrugClassToId(drug.drug_class);
+      const lane = getLaneForClass(classId, result);
+      const conflicts = getDrugConflicts(drug, state);
+      const laneLabel = lane === "neutral" ? "Not currently ranked" : `${titleCase(lane)} lane`;
+
+      container.innerHTML = `
+        <header>
+          <div>
+            <h4>${titleCase(drug.drug_name)}</h4>
+            <p>${CLASS_META[classId].label}</p>
+          </div>
+          <div class="chip-row">
+            <span class="pill ${lane}">${laneLabel}</span>
+            ${conflicts.length ? `<span class="pill avoid">Profile conflict</span>` : `<span class="pill neutral">No direct conflict detected</span>`}
+          </div>
+        </header>
+
+        <div class="metric-grid">
+          <div class="metric">
+            <strong>Route</strong>
+            <span>${prettifyValue(drug.route)}</span>
+          </div>
+          <div class="metric">
+            <strong>Rough cost</strong>
+            <span>${prettifyValue(drug.rough_cost_level)}</span>
+          </div>
+          <div class="metric">
+            <strong>Weight effect</strong>
+            <span>${prettifyWeightEffect(drug.weight_effect)}</span>
+          </div>
+          <div class="metric">
+            <strong>Hypoglycemia risk</strong>
+            <span>${prettifyValue(drug.hypoglycemia_risk)}</span>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>Major cautions</strong>
+          <ul class="drug-list">
+            ${drug.major_cautions.map((item) => `<li>${item}</li>`).join("")}
+          </ul>
+        </div>
+
+        ${conflicts.length
+          ? `
+            <div class="callout warning">
+              <strong>Profile conflicts</strong>
+              <ul>
+                ${conflicts.map((item) => `<li>${item}</li>`).join("")}
+              </ul>
+            </div>
+          `
+          : `
+          `}
+      `;
+    }
+
+    function getLaneForClass(classId, result) {
+      if (result.preferred_classes.includes(classId)) return "preferred";
+      if (result.acceptable_classes.includes(classId)) return "acceptable";
+      if (result.avoid_classes.includes(classId)) return "avoid";
+      return "neutral";
+    }
+
+    function findDrug(drugName) {
+      return DRUG_DATA.drugs.find((drug) => drug.drug_name === drugName) || null;
+    }
+
+    function groupDrugsByClass(drugs) {
+      return drugs.reduce((accumulator, drug) => {
+        const key = mapDrugClassToId(drug.drug_class);
+        if (!accumulator[key]) {
+          accumulator[key] = [];
+        }
+        accumulator[key].push(drug);
+        return accumulator;
+      }, {});
+    }
+
+    function mapDrugClassToId(drugClass) {
+      switch (drugClass) {
+        case "metformin":
+          return "metformin";
+        case "SGLT2 inhibitor":
+          return "SGLT2i";
+        case "GLP-1 RA":
+          return "GLP1_RA";
+        case "dual GIP/GLP-1 RA":
+          return "dual_GIP_GLP1_RA";
+        case "DPP-4 inhibitor":
+          return "DPP4i";
+        case "Sulfonylurea":
+          return "sulfonylurea";
+        case "pioglitazone":
+          return "pioglitazone";
+        case "basal insulin":
+          return "basal_insulin";
+        default:
+          return "metformin";
+      }
+    }
+
+    function getDrugConflicts(drug, state) {
+      const profileFlags = {
+        metformin_contraindicated: state.metformin_contraindicated,
+        metformin_intolerance: false,
+        sglt2i_contraindicated: state.SGLT2i_contraindicated,
+        sglt2i_intolerance: false,
+        glp1_ra_contraindicated: state.GLP1_RA_contraindicated,
+        glp1_ra_intolerance: false,
+        dual_gip_glp1_ra_contraindicated: state.dual_GIP_GLP1_RA_contraindicated,
+        dual_gip_glp1_ra_intolerance: false,
+        dpp4i_contraindicated: state.dpp4i_contraindicated,
+        dpp4i_intolerance: false,
+        sulfonylurea_contraindicated: state.sulfonylurea_contraindicated,
+        sulfonylurea_intolerance: false,
+        pioglitazone_contraindicated: state.pioglitazone_contraindicated,
+        pioglitazone_intolerance: false,
+        basal_insulin_contraindicated: state.basal_insulin_contraindicated,
+        high_hypoglycemia_risk: state.high_hypoglycemia_risk,
+        prioritize_hypoglycemia_avoidance: state.prioritize_hypoglycemia_avoidance,
+        prefers_oral_only: state.prefers_oral_only,
+        has_hf: state.has_HF,
+        on_glp1_based_therapy: state.on_GLP1_RA || state.on_dual_GIP_GLP1_RA
+      };
+
+      return (drug.key_exclusion_conditions || [])
+        .filter((flag) => profileFlags[flag])
+        .map(humaniseConflict);
+    }
+
+    function humaniseConflict(flag) {
+      const labels = {
+        metformin_contraindicated: "Metformin is marked contraindicated.",
+        metformin_intolerance: "Metformin intolerance flag is present.",
+        sglt2i_contraindicated: "SGLT2 inhibitors are marked contraindicated.",
+        sglt2i_intolerance: "SGLT2 inhibitor intolerance flag is present.",
+        glp1_ra_contraindicated: "GLP-1 receptor agonists are marked contraindicated.",
+        glp1_ra_intolerance: "GLP-1 receptor agonist intolerance flag is present.",
+        dual_gip_glp1_ra_contraindicated: "Dual GIP/GLP-1 therapy is marked contraindicated.",
+        dual_gip_glp1_ra_intolerance: "Dual GIP/GLP-1 intolerance flag is present.",
+        dpp4i_contraindicated: "DPP-4 inhibitors are marked contraindicated.",
+        dpp4i_intolerance: "DPP-4 inhibitor intolerance flag is present.",
+        sulfonylurea_contraindicated: "Sulfonylureas are marked contraindicated.",
+        sulfonylurea_intolerance: "Sulfonylurea intolerance flag is present.",
+        pioglitazone_contraindicated: "Pioglitazone is marked contraindicated.",
+        pioglitazone_intolerance: "Pioglitazone intolerance flag is present.",
+        basal_insulin_contraindicated: "Basal insulin is marked contraindicated.",
+        high_hypoglycemia_risk: "Higher hypoglycemia risk is present.",
+        prioritize_hypoglycemia_avoidance: "Hypoglycemia avoidance is a priority.",
+        prefers_oral_only: "The patient prefers oral-only therapy.",
+        has_hf: "Heart failure is present.",
+        on_glp1_based_therapy: "The patient is already on GLP-1-based therapy."
+      };
+      return labels[flag] || titleCase(flag.replaceAll("_", " "));
+    }
+
+    function getDiabetesTypeKeys(value) {
+      const values = Array.isArray(value) ? value : [value];
+      const selected = new Set();
+
+      values
+        .filter((item) => item !== undefined && item !== null && item !== "")
+        .forEach((item) => {
+          const text = String(item).toLowerCase();
+          if (text.includes("t1dm") || text.includes("type 1")) {
+            selected.add("diabetes_type_T1DM");
+          } else if (text.includes("t2dm") || text.includes("type 2")) {
+            selected.add("diabetes_type_T2DM");
+          } else if (text.includes("gestational")) {
+            selected.add("diabetes_type_gestational");
+          } else {
+            selected.add("diabetes_type_other");
+          }
+        });
+
+      return selected;
+    }
+
+    function applyCurrentMedicationFlags(state, medications = {}) {
+      const classes = Array.isArray(medications?.current_classes) ? medications.current_classes : [];
+      const drugs = Array.isArray(medications?.current_drugs) ? medications.current_drugs : [];
+      const values = [
+        ...classes,
+        ...drugs.map((drug) => drug?.name)
+      ];
+
+      values.forEach((value) => {
+        const classId = normalizeMedicationClassId(value);
+        const key = {
+          metformin: "on_metformin",
+          SGLT2i: "on_SGLT2i",
+          GLP1_RA: "on_GLP1_RA",
+          dual_GIP_GLP1_RA: "on_dual_GIP_GLP1_RA",
+          DPP4i: "on_DPP4i",
+          sulfonylurea: "on_sulfonylurea",
+          basal_insulin: "on_basal_insulin"
+        }[classId];
+
+        if (key) {
+          state[key] = true;
+        }
+      });
+    }
+
+    function applyContraindicationFlags(state, contraindications = []) {
+      if (!Array.isArray(contraindications)) {
+        return;
+      }
+
+      contraindications.forEach((value) => {
+        const classId = normalizeMedicationClassId(value);
+        const key = {
+          metformin: "metformin_contraindicated",
+          SGLT2i: "SGLT2i_contraindicated",
+          GLP1_RA: "GLP1_RA_contraindicated",
+          dual_GIP_GLP1_RA: "dual_GIP_GLP1_RA_contraindicated",
+          pioglitazone: "pioglitazone_contraindicated",
+          DPP4i: "dpp4i_contraindicated",
+          sulfonylurea: "sulfonylurea_contraindicated",
+          basal_insulin: "basal_insulin_contraindicated"
+        }[classId];
+
+        if (key) {
+          state[key] = true;
+        }
+      });
+    }
+
+    function normalizeMedicationClassId(value) {
+      const text = String(value || "").toLowerCase();
+
+      if (text.includes("dual") || text.includes("tirzepatide") || text.includes("gip")) return "dual_GIP_GLP1_RA";
+      if (text.includes("glp")) return "GLP1_RA";
+      if (text.includes("sglt2")) return "SGLT2i";
+      if (text.includes("dpp")) return "DPP4i";
+      if (text.includes("sulfonylurea") || text.includes("glipizide") || text.includes("glyburide") || text.includes("glimepiride")) return "sulfonylurea";
+      if (text.includes("insulin")) return "basal_insulin";
+      if (text.includes("pioglitazone") || text.includes("thiazolidinedione")) return "pioglitazone";
+      if (text.includes("metformin")) return "metformin";
+      return "";
+    }
+
+    function addQualityIssue(collection, label, detail, critical = false) {
+      collection.push({ label, detail, critical });
+    }
+
+    function validateLabFreshness(quality, label, dateString, maxAgeDays) {
+      if (!dateString) {
+        addQualityIssue(quality.missing, `${label} date`, "No collection date was available.", false);
+        return;
+      }
+
+      const ageDays = getDateAgeInDays(dateString);
+      if (ageDays === null) {
+        addQualityIssue(quality.conflicts, `${label} date`, "The collection date could not be parsed.", false);
+        return;
+      }
+
+      if (ageDays > maxAgeDays) {
+        addQualityIssue(
+          quality.outdated,
+          label,
+          `${formatIsoDate(dateString)} is ${ageDays} days old; expected within ${maxAgeDays} days.`,
+          false
+        );
+      }
+    }
+
+    function finalizeDataQuality(quality) {
+      const hasCriticalMissing = quality.missing.some((item) => item.critical);
+      const hasAnyIssue = quality.missing.length || quality.outdated.length || quality.conflicts.length;
+      const metaStatus = String(quality.meta?.data_completeness || "").toLowerCase();
+
+      if (hasCriticalMissing) {
+        quality.status = "insufficient";
+      } else if (hasAnyIssue || metaStatus === "partial") {
+        quality.status = "partial";
+      } else {
+        quality.status = "complete";
+      }
+
+      return quality;
+    }
+
+    function firstNumeric(...values) {
+      for (const value of values) {
+        if (value === undefined || value === null || value === "") {
+          continue;
+        }
+
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+
+      return null;
+    }
+
+    function getDateAgeInDays(dateString) {
+      const date = parseDateValue(dateString);
+      if (!date) {
+        return null;
+      }
+
+      return Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
+    }
+
+    function formatIsoDate(dateString) {
+      const date = parseDateValue(dateString);
+      if (!date) {
+        return "date unavailable";
+      }
+
+      return date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      });
+    }
+
+    function parseDateValue(dateString) {
+      if (!dateString) {
+        return null;
+      }
+
+      const dateOnlyMatch = String(dateString).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnlyMatch) {
+        const [, year, month, day] = dateOnlyMatch;
+        return new Date(Number(year), Number(month) - 1, Number(day), 12);
+      }
+
+      const timestamp = Date.parse(dateString);
+      return Number.isFinite(timestamp) ? new Date(timestamp) : null;
+    }
+
+    function formatLabEvidence(lab, unit, fallbackValue) {
+      const value = firstNumeric(lab?.value, fallbackValue);
+      if (value === null) {
+        return "Not documented";
+      }
+
+      const unitLabel = unit || lab?.unit || "";
+      const separator = unitLabel === "%" ? "" : " ";
+      const dateLabel = lab?.date ? ` (${formatIsoDate(lab.date)})` : "";
+      return `${value}${unitLabel ? `${separator}${unitLabel}` : ""}${dateLabel}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function addUnique(list, item) {
+      if (item && !list.includes(item)) {
+        list.push(item);
+      }
+    }
+
+    function removeIfPresent(item, list) {
+      const index = list.indexOf(item);
+      if (index >= 0) {
+        list.splice(index, 1);
+      }
+    }
+
+    function moveUpIfPresent(item, preferred, acceptable) {
+      if (acceptable.includes(item)) {
+        removeIfPresent(item, acceptable);
+        preferred.unshift(item);
+        return;
+      }
+
+      if (preferred.includes(item)) {
+        removeIfPresent(item, preferred);
+        preferred.unshift(item);
+      }
+    }
+
+    function moveDownIfPresent(item, preferred, acceptable) {
+      if (preferred.includes(item)) {
+        removeIfPresent(item, preferred);
+        acceptable.push(item);
+        return;
+      }
+
+      if (acceptable.includes(item)) {
+        removeIfPresent(item, acceptable);
+        acceptable.push(item);
+      }
+    }
+
+    function dedupe(list) {
+      return list.filter((item, index) => list.indexOf(item) === index);
+    }
+
+    function toNumber(value, fallback) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function toInteger(value, fallback) {
+      const parsed = Number.parseInt(String(value), 10);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function clamp(value, min, max) {
+      let nextValue = value;
+      if (Number.isFinite(min)) {
+        nextValue = Math.max(min, nextValue);
+      }
+      if (Number.isFinite(max)) {
+        nextValue = Math.min(max, nextValue);
+      }
+      return nextValue;
+    }
+
+    function joinLabels(labels) {
+      if (labels.length <= 1) {
+        return labels[0] || "";
+      }
+      if (labels.length === 2) {
+        return `${labels[0]} and ${labels[1]}`;
+      }
+      return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+    }
+
+    function roundToOne(value) {
+      return Math.round(value * 10) / 10;
+    }
+
+    function titleCase(value) {
+      return String(value)
+        .split(" ")
+        .map((word) => word ? word.charAt(0).toUpperCase() + word.slice(1) : "")
+        .join(" ");
+    }
+
+    function prettifyValue(value) {
+      return titleCase(String(value).replaceAll("_", " "));
+    }
+
+    function prettifyWeightEffect(value) {
+      const labels = {
+        neutral: "Neutral",
+        gain: "Gain",
+        loss_modest: "Modest loss",
+        loss_moderate: "Moderate loss",
+        loss_high: "High loss"
+      };
+      return labels[value] || prettifyValue(value);
+    }
+
+    function summariseValueList(values) {
+      const unique = [...new Set(values)];
+      return unique.join(" / ");
+    }
+
+    function formatGap(value) {
+      const absValue = Math.abs(value).toFixed(1);
+      return value >= 0 ? absValue : `-${absValue}`;
+    }
+
+    function persistState() {
+      try {
+        // The app now starts fresh on every page load, so browser persistence stays disabled.
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+        // Ignore storage failures in restricted environments.
+      }
+    }
+
+    function clearStoredState() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+        // Ignore storage failures in restricted environments.
+      }
+    }
+
+    async function loadDrugData() {
+      const jsonUrl = new URL("./Drugs.json", import.meta.url);
+      const response = await fetch(jsonUrl);
+
+      if (!response.ok) {
+        throw new Error(`Unable to load drug data: ${response.status} ${response.statusText}`.trim());
+      }
+
+      const data = await response.json();
+
+      if (!data || !Array.isArray(data.drugs)) {
+        throw new Error("Drugs.json must contain a top-level drugs array.");
+      }
+
+      return data;
+    }
+
+    async function loadPatientData() {
+      const jsonUrl = new URL("./patientData.json", import.meta.url);
+      const response = await fetch(jsonUrl);
+
+      if (!response.ok) {
+        throw new Error(`Unable to load patient data: ${response.status} ${response.statusText}`.trim());
+      }
+
+      const data = await response.json();
+
+      if (!data) {
+        throw new Error("patientData.json is invalid.");
+      }
+
+      return data;
+    }
+
+    function showInitializationError(error) {
+      console.error("Unable to initialize drug recommendation app.", error);
+
+      const protocolHint = window.location.protocol === "file:"
+        ? " This browser may block local JSON requests from file:// pages, so opening the folder with a small local web server is more reliable."
+        : "";
+
+      const message = `The app could not load the local drug catalog or EHR patient data.${protocolHint}`;
+      const statusBanner = document.getElementById("status-banner");
+      const wizardStageLabel = document.getElementById("wizard-stage-label");
+      const wizardProgressCopy = document.getElementById("wizard-progress-copy");
+      const questionStage = document.getElementById("question-stage");
+      const questionTitle = document.getElementById("question-title");
+      const questionHelp = document.getElementById("question-help");
+      const questionInputArea = document.getElementById("question-input-area");
+
+      if (wizardStageLabel) {
+        wizardStageLabel.textContent = "Clinical data unavailable";
+      }
+
+      if (wizardProgressCopy) {
+        wizardProgressCopy.textContent = message;
+      }
+
+      if (questionStage) {
+        questionStage.textContent = "Catalog load error";
+      }
+
+      if (questionTitle) {
+        questionTitle.textContent = "Unable to load the medication catalog.";
+      }
+
+      if (questionHelp) {
+        questionHelp.textContent = "Keep Drugs.json in the same folder as the app files and retry.";
+      }
+
+      if (questionInputArea) {
+        questionInputArea.innerHTML = `<div class="empty-state">${message}</div>`;
+      }
+
+      if (statusBanner) {
+        statusBanner.dataset.tone = "danger";
+        statusBanner.innerHTML = `
+            <strong>Clinical data unavailable</strong>
+            <p>${message}</p>
+        `;
+      }
+    }
