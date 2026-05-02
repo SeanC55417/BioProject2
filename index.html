@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ADA 2026 Simplified Glucose-Lowering Recommender</title>
-  <link rel="stylesheet" href="./drug_recommendation_app.css">
+  <link rel="stylesheet" href="drug_recommendation_app.css">
 </head>
 <body>
   <div class="disclaimer-modal" id="disclaimer-modal" aria-hidden="true" hidden>
@@ -22,6 +22,23 @@
     </section>
   </div>
 
+  <nav class="side-tab-drawer" aria-label="Application sections">
+    <div class="side-tab-grip" aria-hidden="true">
+      <span>Sections</span>
+    </div>
+    <div class="side-tab-panel">
+      <span class="side-tab-title">Navigate</span>
+      <div class="tabs-bar" role="tablist" aria-label="Application sections">
+        <button class="tab-btn is-active" id="tab-button-results" type="button" role="tab" aria-selected="true" aria-controls="tab-results" data-tab-target="tab-results">
+          1. Recommendations
+        </button>
+        <button class="tab-btn" id="tab-button-intake" type="button" role="tab" aria-selected="false" aria-controls="tab-intake" data-tab-target="tab-intake">
+          2. Refinement Mode
+        </button>
+      </div>
+    </div>
+  </nav>
+
   <main class="page-shell">
     <section class="hero">
       <div class="hero-grid">
@@ -37,14 +54,6 @@
     </section>
 
     <section class="tabs-shell">
-      <div class="tabs-bar" role="tablist" aria-label="Application sections">
-        <button class="tab-btn is-active" id="tab-button-results" type="button" role="tab" aria-selected="true" aria-controls="tab-results" data-tab-target="tab-results">
-          1. Recommendations
-        </button>
-        <button class="tab-btn" id="tab-button-intake" type="button" role="tab" aria-selected="false" aria-controls="tab-intake" data-tab-target="tab-intake">
-          2. Refinement Mode
-        </button>
-      </div>
 
       <section class="tab-panel" id="tab-intake" role="tabpanel" aria-labelledby="tab-button-intake" hidden>
         <div class="intake-grid">
