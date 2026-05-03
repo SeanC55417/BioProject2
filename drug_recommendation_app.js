@@ -824,6 +824,7 @@
       dataQualityList: document.getElementById("data-quality-list"),
       patientEvidenceGrid: document.getElementById("patient-evidence-grid"),
       patientDataEditor: document.getElementById("patient-data-editor"),
+      ehrFixtureSelect: document.getElementById("ehr-fixture-select"),
       compareLeft: document.getElementById("compare-left"),
       compareRight: document.getElementById("compare-right"),
       compareLeftCard: document.getElementById("compare-left-card"),
@@ -857,16 +858,17 @@
 
     function bindStaticEvents() {
       dom.demoBtn.addEventListener("click", () => {
-        activeEhrProfile = SAMPLE_EHR_PROFILE;
-        updateUploadStatus("Sample EHR loaded", "ok");
-        hydrateSession(createCompletedSession(activeEhrProfile.state));
-        switchTab("tab-results");
+        loadEhrProfile(SAMPLE_EHR_PROFILE);
+        if (dom.ehrFixtureSelect) {
+          dom.ehrFixtureSelect.value = "patientData.json";
+        }
       });
       dom.resetBtn.addEventListener("click", () => {
         hydrateSession(createFreshSession(activeEhrProfile.state));
         switchTab("tab-intake");
       });
       dom.ehrUploadInput?.addEventListener("change", handleEhrUpload);
+      dom.ehrFixtureSelect?.addEventListener("change", handleEhrFixtureSelection);
       dom.jumpToResultsTopBtn.addEventListener("click", () => switchTab("tab-results"));
       dom.backToQuestionsBtn?.addEventListener("click", () => switchTab("tab-intake"));
       dom.backQuestionBtn.addEventListener("click", goToPreviousQuestion);
@@ -1026,17 +1028,47 @@
         updateUploadStatus(`Reading ${file.name}...`, "");
         const text = await file.text();
         const uploadedData = JSON.parse(text);
-        activeEhrProfile = createEhrProfile(uploadedData, file.name);
-        compareState = { left: "", right: "" };
-        hydrateSession(createCompletedSession(activeEhrProfile.state));
-        switchTab("tab-results");
-        updateUploadStatus(`Loaded ${file.name}`, "ok");
+        loadEhrProfile(createEhrProfile(uploadedData, file.name), `Loaded ${file.name}`);
+        if (dom.ehrFixtureSelect) {
+          dom.ehrFixtureSelect.value = "";
+        }
       } catch (error) {
         console.error("Unable to import EHR JSON.", error);
         updateUploadStatus("Upload failed: invalid EHR JSON", "error");
       } finally {
         event.target.value = "";
       }
+    }
+
+    async function handleEhrFixtureSelection(event) {
+      const fixturePath = event.target.value;
+      if (!fixturePath) {
+        return;
+      }
+
+      try {
+        const sourceLabel = fixturePath.split("/").pop() || fixturePath;
+        updateUploadStatus(`Loading ${sourceLabel}...`, "");
+        const response = await fetch(new URL(`./${fixturePath}`, import.meta.url));
+
+        if (!response.ok) {
+          throw new Error(`Unable to load ${sourceLabel}: ${response.status} ${response.statusText}`.trim());
+        }
+
+        const fixtureData = await response.json();
+        loadEhrProfile(createEhrProfile(fixtureData, sourceLabel), `Loaded ${sourceLabel}`);
+      } catch (error) {
+        console.error("Unable to load EHR test fixture.", error);
+        updateUploadStatus("Test file failed to load", "error");
+      }
+    }
+
+    function loadEhrProfile(profile, statusMessage = "Sample EHR loaded") {
+      activeEhrProfile = profile;
+      compareState = { left: "", right: "" };
+      hydrateSession(createCompletedSession(activeEhrProfile.state));
+      switchTab("tab-results");
+      updateUploadStatus(statusMessage, "ok");
     }
 
     function updateUploadStatus(message, tone) {

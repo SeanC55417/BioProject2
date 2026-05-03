@@ -377,6 +377,28 @@
       justify-content: center;
     }
 
+    .fixture-select-control {
+      min-width: min(100%, 17rem);
+    }
+
+    .ehr-fixture-select {
+      width: 100%;
+      min-height: 2.55rem;
+      padding: 0.62rem 2.2rem 0.62rem 0.9rem;
+      border: 1px solid rgba(15, 124, 130, 0.14);
+      border-radius: 999px;
+      background: rgba(15, 124, 130, 0.08);
+      color: var(--focus);
+      font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .ehr-fixture-select:focus {
+      outline: 3px solid rgba(15, 124, 130, 0.35);
+      outline-offset: 2px;
+    }
+
     .file-upload-btn:focus-within,
     .file-upload-btn:focus-visible {
       outline: 3px solid rgba(15, 124, 130, 0.35);
@@ -384,17 +406,20 @@
     }
 
     .upload-status {
-      display: inline-flex;
-      align-items: center;
+      display: inline-block;
+      box-sizing: border-box;
       min-height: 2.35rem;
-      max-width: 18rem;
+      max-width: min(100%, 18rem);
       padding: 0.42rem 0.72rem;
-      border-radius: 999px;
+      border-radius: 1.1rem;
       background: rgba(32, 48, 49, 0.05);
       color: var(--muted);
       font-family: "Avenir Next", "Trebuchet MS", sans-serif;
       font-size: 0.82rem;
       line-height: 1.35;
+      overflow-wrap: anywhere;
+      white-space: normal;
+      word-break: break-word;
     }
 
     .upload-status[data-tone="ok"] {
@@ -2229,7 +2254,8 @@
     }
 
     .board-panel-heading .toolbar {
-      max-width: 24rem;
+      max-width: 36rem;
+      justify-content: flex-end;
     }
 
     .ehr-data-block {

@@ -113,6 +113,26 @@
                   <p>Edit mapped EHR variables and the recommendation board updates immediately.</p>
                 </div>
                 <div class="toolbar">
+                  <label class="fixture-select-control" for="ehr-fixture-select">
+                    <span class="visually-hidden">Load test EHR file</span>
+                    <select class="ehr-fixture-select" id="ehr-fixture-select">
+                      <option value="" disabled>Uploaded EHR JSON</option>
+                      <option value="patientData.json">Sample EHR</option>
+                      <option value="ehr_test_files/01_complete_urgent_t2dm_cardiorenal.json">01 urgent T2DM + cardiorenal</option>
+                      <option value="ehr_test_files/02_mild_uncomplicated_t2dm.json">02 mild uncomplicated T2DM</option>
+                      <option value="ehr_test_files/03_hf_ckd_without_severe_hyperglycemia.json">03 HF/CKD without severe glycemia</option>
+                      <option value="ehr_test_files/04_advanced_ckd_albuminuria.json">04 advanced CKD + albuminuria</option>
+                      <option value="ehr_test_files/05_weight_mash_priority.json">05 weight + MASH priority</option>
+                      <option value="ehr_test_files/06_oral_cost_hypoglycemia_constraints.json">06 oral/cost/hypoglycemia constraints</option>
+                      <option value="ehr_test_files/07_missing_critical_values.json">07 missing critical values</option>
+                      <option value="ehr_test_files/08_outdated_labs_partial_data.json">08 outdated labs + partial data</option>
+                      <option value="ehr_test_files/09_invalid_and_conflicting_values.json">09 invalid + conflicting values</option>
+                      <option value="ehr_test_files/10_mixed_t2dm_gestational_scope.json">10 mixed T2DM + gestational scope</option>
+                      <option value="ehr_test_files/11_type1_only_scope_redirect.json">11 type 1 only scope redirect</option>
+                      <option value="ehr_test_files/12_contraindications_and_current_therapy.json">12 contraindications + current therapy</option>
+                      <option value="ehr_test_files/13_out_of_range_extreme_values.json">13 out-of-range extreme values</option>
+                    </select>
+                  </label>
                   <label class="ghost-btn file-upload-btn" for="ehr-upload-input">Upload EHR JSON</label>
                   <input class="visually-hidden" id="ehr-upload-input" type="file" accept=".json,application/json">
                   <span class="upload-status" id="ehr-upload-status" role="status">Sample EHR loaded</span>
