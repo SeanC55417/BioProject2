@@ -3535,8 +3535,10 @@
       return Number.isFinite(timestamp) ? new Date(timestamp) : null;
     }
 
-    function formatLabEvidence(lab, unit, fallbackValue) {
-      const value = firstNumeric(lab?.value, fallbackValue);
+    function formatLabEvidence(lab, unit, mappedValue) {
+      const value = arguments.length >= 3
+        ? firstNumeric(mappedValue)
+        : firstNumeric(lab?.value);
       if (value === null) {
         return "Not documented";
       }
