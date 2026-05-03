@@ -1,0 +1,44 @@
+{
+  "patient_id": "TEST-007",
+  "demographics": {},
+  "conditions": {
+    "ascvd": false,
+    "heart_failure": {
+      "present": false
+    },
+    "ckd": {
+      "present": false
+    }
+  },
+  "labs": {},
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {},
+  "medications": {
+    "current_classes": [],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "moderate",
+    "hypoglycemia_priority": false
+  },
+  "safety": {
+    "high_hypoglycemia_risk": false,
+    "contraindications": []
+  },
+  "goals": {},
+  "meta": {
+    "data_completeness": "insufficient",
+    "test_case": "Critical structured variables missing.",
+    "expected_signals": [
+      "insufficient data",
+      "missing diabetes diagnosis",
+      "missing age",
+      "missing A1C",
+      "missing eGFR"
+    ]
+  }
+}

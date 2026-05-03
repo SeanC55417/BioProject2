@@ -1,0 +1,91 @@
+{
+  "patient_id": "TEST-002",
+  "demographics": {
+    "age": 45,
+    "sex": "female"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": false,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": false,
+      "egfr": 96,
+      "albuminuria": false
+    },
+    "masld": false,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": false
+  },
+  "labs": {
+    "a1c": {
+      "value": 7.8,
+      "unit": "%",
+      "date": "2026-04-05"
+    },
+    "random_glucose": {
+      "value": 174,
+      "unit": "mg/dL",
+      "date": "2026-04-21"
+    },
+    "fasting_glucose": {
+      "value": 142,
+      "unit": "mg/dL",
+      "date": "2026-04-21"
+    },
+    "postprandial_glucose": {
+      "value": 196,
+      "unit": "mg/dL",
+      "date": "2026-04-21"
+    },
+    "egfr": {
+      "value": 96,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-05"
+    },
+    "uacr": {
+      "value": 8,
+      "unit": "mg/g",
+      "date": "2026-04-05"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 71,
+    "bmi": 26.1
+  },
+  "medications": {
+    "current_classes": [],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "low",
+    "hypoglycemia_priority": false
+  },
+  "safety": {
+    "high_hypoglycemia_risk": false,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 7.0,
+    "weight_loss_goal": false
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "Uncomplicated T2DM above target without cardiorenal or weight drivers.",
+    "expected_signals": [
+      "glycemia above target",
+      "metformin first-line style recommendation"
+    ]
+  }
+}

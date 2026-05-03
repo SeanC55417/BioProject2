@@ -22,31 +22,14 @@
     </section>
   </div>
 
-  <nav class="side-tab-drawer" aria-label="Application sections">
-    <div class="side-tab-grip" aria-hidden="true">
-      <span>Sections</span>
-    </div>
-    <div class="side-tab-panel">
-      <span class="side-tab-title">Navigate</span>
-      <div class="tabs-bar" role="tablist" aria-label="Application sections">
-        <button class="tab-btn is-active" id="tab-button-results" type="button" role="tab" aria-selected="true" aria-controls="tab-results" data-tab-target="tab-results">
-          1. Recommendations
-        </button>
-        <button class="tab-btn" id="tab-button-intake" type="button" role="tab" aria-selected="false" aria-controls="tab-intake" data-tab-target="tab-intake">
-          2. Refinement Mode
-        </button>
-      </div>
-    </div>
-  </nav>
-
   <main class="page-shell">
     <section class="hero">
       <div class="hero-grid">
         <div>
-          <span class="eyebrow">EHR Copilot Panel</span>
+          <span class="eyebrow">EHR Panel</span>
           <h2>Diabetes Treatment Recommendations</h2>
           <p>
-            Auto-populated clinical decision support that analyzes structured patient data, ranks glucose-lowering treatment classes, and keeps manual refinement available as a secondary workflow. Recommendations should always be interpreted in clinical context.
+            Auto-populated clinical decision support that analyzes structured patient data, ranks glucose-lowering treatment classes, and supports real-time edits in the EHR patient data board. Recommendations should always be interpreted in clinical context.
           </p>
         </div>
         
@@ -55,7 +38,7 @@
 
     <section class="tabs-shell">
 
-      <section class="tab-panel" id="tab-intake" role="tabpanel" aria-labelledby="tab-button-intake" hidden>
+      <section class="tab-panel" id="tab-intake" aria-label="Refinement Mode" hidden>
         <div class="intake-grid">
           <section class="panel flow-panel">
             <div class="panel-heading">
@@ -120,74 +103,100 @@
         </div>
       </section>
 
-      <section class="tab-panel is-active" id="tab-results" role="tabpanel" aria-labelledby="tab-button-results">
+      <section class="tab-panel is-active" id="tab-results" aria-label="Recommendations">
         <section class="panel results-panel" aria-live="polite">
-          <div class="panel-heading">
-            <div>
-              <h2>Recommendation Board</h2>
-              <p>Auto-generated from structured EHR data. Class-level ranking is shown first, then example drugs from the medication catalog.</p>
-            </div>
-            <div class="toolbar">
-              <label class="ghost-btn file-upload-btn" for="ehr-upload-input">Upload EHR JSON</label>
-              <input class="visually-hidden" id="ehr-upload-input" type="file" accept=".json,application/json">
-              <span class="upload-status" id="ehr-upload-status" role="status">Sample EHR loaded</span>
-              <button class="ghost-btn" id="back-to-questions-btn" type="button">Refine variables</button>
-            </div>
-          </div>
-
-          <div class="summary-strip" id="summary-strip">
-            <div class="mini-stat">
-              <strong>EHR Data</strong>
-              <span class="status-word" id="data-completeness-summary">Checking</span>
-            </div>
-            <div class="mini-stat">
-              <strong>Preferred</strong>
-              <span id="preferred-count">0</span>
-            </div>
-            <div class="mini-stat">
-              <strong>Acceptable</strong>
-              <span id="acceptable-count">0</span>
-            </div>
-            <div class="mini-stat">
-              <strong>Avoid</strong>
-              <span id="avoid-count">0</span>
-            </div>
-          </div>
-
-          <div class="status-banner" id="status-banner" data-tone="ok">
-            <strong>Ready</strong>
-            <p>Enter a type 2 diabetes profile to generate recommendations.</p>
-          </div>
-
-          <div class="stack-board">
-            <section class="lane preferred">
-              <div class="lane-head">
-                <div class="lane-title"><span class="lane-swatch"></span><span>Preferred</span></div>
-                <div class="lane-note">Higher-priority classes based on the simplified algorithm.</div>
+          <div class="results-workspace">
+            <section class="ehr-data-board board-panel">
+              <div class="panel-heading board-panel-heading">
+                <div>
+                  <h2>EHR Patient Data Board</h2>
+                  <p>Edit mapped EHR variables and the recommendation board updates immediately.</p>
+                </div>
+                <div class="toolbar">
+                  <label class="ghost-btn file-upload-btn" for="ehr-upload-input">Upload EHR JSON</label>
+                  <input class="visually-hidden" id="ehr-upload-input" type="file" accept=".json,application/json">
+                  <span class="upload-status" id="ehr-upload-status" role="status">Sample EHR loaded</span>
+                </div>
               </div>
-              <div class="recommendation-grid" id="preferred-grid"></div>
+
+              <div class="ehr-data-block">
+                <div class="patient-data-editor" id="patient-data-editor"></div>
+
+                <section class="mapped-ehr-card" aria-labelledby="mapped-ehr-heading">
+                  <div class="mapped-ehr-heading">
+                    <h3 id="mapped-ehr-heading">Original EHR data view</h3>
+                    <p>Current mapped variables used by the engine.</p>
+                  </div>
+                  <div class="patient-evidence-grid" id="patient-evidence-grid"></div>
+                </section>
+              </div>
             </section>
 
-            <section class="lane acceptable">
-              <div class="lane-head">
-                <div class="lane-title"><span class="lane-swatch"></span><span>Acceptable</span></div>
-                <div class="lane-note">Reasonable alternatives or second-line options to consider.</div>
+            <section class="recommendation-board board-panel">
+              <div class="panel-heading board-panel-heading">
+                <div>
+                  <h2>Recommendation Board</h2>
+                  <p>Class-level ranking is shown first, then example drugs from the medication catalog.</p>
+                </div>
               </div>
-              <div class="recommendation-grid" id="acceptable-grid"></div>
-            </section>
 
-            <section class="lane avoid">
-              <div class="lane-head">
-                <div class="lane-title"><span class="lane-swatch"></span><span>Avoid</span></div>
-                <div class="lane-note">Centralized exclusions and profile conflicts from the simplified rule set.</div>
+              <div class="summary-strip" id="summary-strip">
+                <div class="mini-stat">
+                  <strong>EHR Data</strong>
+                  <span class="status-word" id="data-completeness-summary">Checking</span>
+                </div>
+                <div class="mini-stat">
+                  <strong>Preferred</strong>
+                  <span id="preferred-count">0</span>
+                </div>
+                <div class="mini-stat">
+                  <strong>Acceptable</strong>
+                  <span id="acceptable-count">0</span>
+                </div>
+                <div class="mini-stat">
+                  <strong>Avoid</strong>
+                  <span id="avoid-count">0</span>
+                </div>
               </div>
-              <div class="recommendation-grid" id="avoid-grid"></div>
+
+              <div class="status-banner" id="status-banner" data-tone="ok">
+                <strong>Ready</strong>
+                <p>Enter a type 2 diabetes profile to generate recommendations.</p>
+              </div>
+
+              <div class="missing-data-prompt" id="missing-data-prompt" hidden></div>
+
+              <div class="stack-board" id="stack-board">
+                <section class="lane preferred">
+                  <div class="lane-head">
+                    <div class="lane-title"><span class="lane-swatch"></span><span>Preferred</span></div>
+                    <div class="lane-note">Higher-priority classes based on the simplified algorithm.</div>
+                  </div>
+                  <div class="recommendation-grid" id="preferred-grid"></div>
+                </section>
+
+                <section class="lane acceptable">
+                  <div class="lane-head">
+                    <div class="lane-title"><span class="lane-swatch"></span><span>Acceptable</span></div>
+                    <div class="lane-note">Reasonable alternatives or second-line options to consider.</div>
+                  </div>
+                  <div class="recommendation-grid" id="acceptable-grid"></div>
+                </section>
+
+                <section class="lane avoid">
+                  <div class="lane-head">
+                    <div class="lane-title"><span class="lane-swatch"></span><span>Avoid</span></div>
+                    <div class="lane-note">Centralized exclusions and profile conflicts from the simplified rule set.</div>
+                  </div>
+                  <div class="recommendation-grid" id="avoid-grid"></div>
+                </section>
+              </div>
             </section>
           </div>
 
           <details class="explanation-shell" open>
             <summary>
-              <span>Rationale and Patient Data</span>
+              <span>Rationale and Clinical Reasoning</span>
               <small>Transparent reasoning from mapped EHR variables</small>
             </summary>
             <div class="insight-grid">
@@ -207,11 +216,6 @@
                 <div class="data-quality-list" id="data-quality-list"></div>
               </section>
               <section class="insight-card">
-                <h3>Contributing patient data</h3>
-                <p>Key mapped variables used by the recommendation engine.</p>
-                <div class="patient-evidence-grid" id="patient-evidence-grid"></div>
-              </section>
-              <section class="insight-card">
                 <h3>Derived flags</h3>
                 <p>Quick reads of the patient profile that steer major branches like CKD, cardiorenal disease, and severe hyperglycemia.</p>
                 <div class="flag-row" id="flag-row"></div>
@@ -219,7 +223,7 @@
             </div>
           </details>
 
-          <section class="compare-shell">
+          <section class="compare-shell" id="compare-shell">
             <div class="compare-header">
               <div>
                 <h3>Drug comparison</h3>

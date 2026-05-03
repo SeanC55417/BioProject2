@@ -1,0 +1,100 @@
+{
+  "patient_id": "TEST-005",
+  "demographics": {
+    "age": 58,
+    "sex": "female"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": false,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": false,
+      "egfr": 88,
+      "albuminuria": false
+    },
+    "masld": true,
+    "mash": true,
+    "high_liver_fibrosis_risk": true,
+    "obesity": true
+  },
+  "labs": {
+    "a1c": {
+      "value": 8.9,
+      "unit": "%",
+      "date": "2026-04-18"
+    },
+    "random_glucose": {
+      "value": 221,
+      "unit": "mg/dL",
+      "date": "2026-04-25"
+    },
+    "fasting_glucose": {
+      "value": 174,
+      "unit": "mg/dL",
+      "date": "2026-04-25"
+    },
+    "postprandial_glucose": {
+      "value": 255,
+      "unit": "mg/dL",
+      "date": "2026-04-25"
+    },
+    "egfr": {
+      "value": 88,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-18"
+    },
+    "uacr": {
+      "value": 11,
+      "unit": "mg/g",
+      "date": "2026-04-18"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 123,
+    "bmi": 41.2
+  },
+  "medications": {
+    "current_classes": [
+      "metformin"
+    ],
+    "current_drugs": [
+      {
+        "name": "metformin",
+        "dose": "1000 mg",
+        "frequency": "BID"
+      }
+    ]
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "low",
+    "hypoglycemia_priority": false
+  },
+  "safety": {
+    "high_hypoglycemia_risk": false,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 7.0,
+    "weight_loss_goal": true
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "Severe obesity, weight-loss goal, and MASH/high fibrosis risk.",
+    "expected_signals": [
+      "weight or metabolic consideration present",
+      "MASH / fibrosis risk present",
+      "incretin-based class priority"
+    ]
+  }
+}

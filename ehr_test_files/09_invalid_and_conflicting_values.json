@@ -1,0 +1,93 @@
+{
+  "patient_id": "TEST-009",
+  "demographics": {
+    "age": "seventy-two"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": false,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": true,
+      "symptomatic": true
+    },
+    "ckd": {
+      "present": true,
+      "egfr": "stage three",
+      "albuminuria": true
+    },
+    "masld": false,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": false
+  },
+  "labs": {
+    "a1c": {
+      "value": "ten point two",
+      "unit": "%",
+      "date": "not-a-date"
+    },
+    "random_glucose": {
+      "value": "three hundred",
+      "unit": "mg/dL",
+      "date": "2026-14-01"
+    },
+    "fasting_glucose": {
+      "value": "two hundred",
+      "unit": "mg/dL",
+      "date": "not-a-date"
+    },
+    "postprandial_glucose": {
+      "value": "high",
+      "unit": "mg/dL",
+      "date": "not-a-date"
+    },
+    "egfr": {
+      "value": "stage three",
+      "unit": "mL/min/1.73m2",
+      "date": "missing"
+    },
+    "uacr": {
+      "value": "positive",
+      "unit": "mg/g",
+      "date": "unknown"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": "205 lb",
+    "bmi": "not recorded"
+  },
+  "medications": {
+    "current_classes": [
+      "metformin"
+    ],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "moderate",
+    "hypoglycemia_priority": false
+  },
+  "safety": {
+    "high_hypoglycemia_risk": false,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": "seven"
+  },
+  "meta": {
+    "data_completeness": "partial",
+    "test_case": "Invalid values and HF present without HF type.",
+    "expected_signals": [
+      "missing age",
+      "missing A1C",
+      "missing eGFR",
+      "invalid lab dates",
+      "heart failure type conflict"
+    ]
+  }
+}

@@ -469,6 +469,37 @@
       { key: "diabetes_type_other", label: "Other forms of diabetes" }
     ];
 
+    const REQUIRED_EHR_INPUTS = [
+      {
+        field: "diabetes_type",
+        labels: ["Diabetes diagnosis"],
+        title: "Diabetes type",
+        prompt: "Select at least one diabetes type in the EHR Patient Data Board.",
+        isComplete: (state) => DIABETES_TYPE_OPTIONS.some((option) => Boolean(state[option.key]))
+      },
+      {
+        field: "patient_age_years",
+        labels: ["Age"],
+        title: "Patient age",
+        prompt: "Enter the patient age between 19 and 99+.",
+        isComplete: (state) => hasRequiredNumber(state.patient_age_years, 19, 99)
+      },
+      {
+        field: "a1c_current_percent",
+        labels: ["A1C"],
+        title: "Current A1C",
+        prompt: "Enter the most recent A1C value.",
+        isComplete: (state) => hasRequiredNumber(state.a1c_current_percent, 4, 18)
+      },
+      {
+        field: "egfr_ml_min_1_73m2",
+        labels: ["eGFR"],
+        title: "eGFR",
+        prompt: "Enter the most recent eGFR for kidney and medication-safety logic.",
+        isComplete: (state) => hasRequiredNumber(state.egfr_ml_min_1_73m2, 1, 180)
+      }
+    ];
+
     const LIVER_CONDITION_OPTIONS = [
       { label: "None", value: "none" },
       { label: "MASLD", value: "MASLD" },
@@ -778,6 +809,8 @@
       backQuestionBtn: document.getElementById("back-question-btn"),
       advanceQuestionBtn: document.getElementById("advance-question-btn"),
       statusBanner: document.getElementById("status-banner"),
+      missingDataPrompt: document.getElementById("missing-data-prompt"),
+      stackBoard: document.getElementById("stack-board"),
       preferredGrid: document.getElementById("preferred-grid"),
       acceptableGrid: document.getElementById("acceptable-grid"),
       avoidGrid: document.getElementById("avoid-grid"),
@@ -790,10 +823,12 @@
       clinicalInsightList: document.getElementById("clinical-insight-list"),
       dataQualityList: document.getElementById("data-quality-list"),
       patientEvidenceGrid: document.getElementById("patient-evidence-grid"),
+      patientDataEditor: document.getElementById("patient-data-editor"),
       compareLeft: document.getElementById("compare-left"),
       compareRight: document.getElementById("compare-right"),
       compareLeftCard: document.getElementById("compare-left-card"),
       compareRightCard: document.getElementById("compare-right-card"),
+      compareShell: document.getElementById("compare-shell"),
       disclaimerModal: document.getElementById("disclaimer-modal"),
       disclaimerDialog: document.querySelector(".disclaimer-dialog"),
       disclaimerAcknowledgeBtn: document.getElementById("disclaimer-ack-btn")
@@ -833,7 +868,7 @@
       });
       dom.ehrUploadInput?.addEventListener("change", handleEhrUpload);
       dom.jumpToResultsTopBtn.addEventListener("click", () => switchTab("tab-results"));
-      dom.backToQuestionsBtn.addEventListener("click", () => switchTab("tab-intake"));
+      dom.backToQuestionsBtn?.addEventListener("click", () => switchTab("tab-intake"));
       dom.backQuestionBtn.addEventListener("click", goToPreviousQuestion);
       dom.advanceQuestionBtn.addEventListener("click", advanceCurrentQuestion);
       dom.disclaimerAcknowledgeBtn?.addEventListener("click", hideDisclaimerModal);
@@ -911,6 +946,59 @@
 
         event.preventDefault();
         advanceCurrentQuestion();
+      });
+
+      dom.patientDataEditor?.addEventListener("click", (event) => {
+        const checkboxRow = event.target.closest(".patient-editor-check");
+        if (!checkboxRow || event.target.matches("input")) {
+          return;
+        }
+
+        const control = checkboxRow.querySelector("[data-patient-field]");
+        if (!control) {
+          return;
+        }
+
+        event.preventDefault();
+        control.checked = !control.checked;
+        applyPatientDataEditorChange(control);
+      });
+
+      dom.patientDataEditor?.addEventListener("keydown", (event) => {
+        if (event.key !== " " && event.key !== "Enter") {
+          return;
+        }
+
+        const checkboxRow = event.target.closest(".patient-editor-check");
+        if (!checkboxRow || event.target.matches("input")) {
+          return;
+        }
+
+        const control = checkboxRow.querySelector("[data-patient-field]");
+        if (!control) {
+          return;
+        }
+
+        event.preventDefault();
+        control.checked = !control.checked;
+        applyPatientDataEditorChange(control);
+      });
+
+
+      dom.patientDataEditor?.addEventListener("input", (event) => {
+        const control = event.target.closest("[data-patient-field]");
+        if (!control || control.type === "checkbox" || control.tagName === "SELECT") {
+          return;
+        }
+        applyPatientDataEditorChange(control);
+      });
+
+      dom.patientDataEditor?.addEventListener("change", (event) => {
+        const control = event.target.closest("[data-patient-field]");
+        if (!control) {
+          return;
+        }
+        applyPatientDataEditorChange(control);
       });
 
       dom.compareLeft.addEventListener("change", () => {
@@ -1140,6 +1228,7 @@
       const age = firstNumeric(demographics.age);
       if (age === null) {
         addQualityIssue(quality.missing, "Age", "Demographic age is required for individualized targets.", true);
+        state.patient_age_years = null;
       } else {
         state.patient_age_years = age;
       }
@@ -1153,6 +1242,7 @@
       const a1cValue = firstNumeric(labs.a1c?.value);
       if (a1cValue === null) {
         addQualityIssue(quality.missing, "A1C", "No recent A1C value was available.", true);
+        state.a1c_current_percent = null;
       } else {
         state.a1c_current_percent = a1cValue;
       }
@@ -1191,6 +1281,7 @@
       const egfr = firstNumeric(labs.egfr?.value, ckd.egfr);
       if (egfr === null) {
         addQualityIssue(quality.missing, "eGFR", "Renal function is required for CKD and medication safety logic.", true);
+        state.egfr_ml_min_1_73m2 = null;
       } else {
         state.egfr_ml_min_1_73m2 = egfr;
       }
@@ -1209,6 +1300,7 @@
       const bmi = firstNumeric(vitals.bmi);
       if (bmi === null) {
         addQualityIssue(quality.missing, "BMI", "BMI was not available for weight-related prioritization.", false);
+        state.bmi = null;
       } else {
         state.bmi = bmi;
       }
@@ -1274,18 +1366,23 @@
         nextState.diabetes_type = "other";
       }
 
-      nextState.patient_age_years = clamp(toInteger(nextState.patient_age_years, DEFAULT_STATE.patient_age_years), 19, 99);
+      nextState.patient_age_years = normalizeOptionalNumber(nextState.patient_age_years, { min: 19, max: 99, integer: true });
       nextState.patient_sex = String(nextState.patient_sex || "unknown");
       nextState.weight_kg = nextState.weight_kg === null || nextState.weight_kg === undefined || nextState.weight_kg === ""
         ? null
         : clamp(toNumber(nextState.weight_kg, DEFAULT_STATE.weight_kg ?? 0), 20, 400);
+      nextState.a1c_current_percent = normalizeOptionalNumber(nextState.a1c_current_percent, { min: 4, max: 18 });
+      nextState.a1c_target_percent = normalizeOptionalNumber(nextState.a1c_target_percent, { min: 5.7, max: 10 });
       nextState.random_glucose_mg_dl = nextState.random_glucose_mg_dl === null ||
         nextState.random_glucose_mg_dl === undefined ||
         nextState.random_glucose_mg_dl === ""
         ? null
         : clamp(toNumber(nextState.random_glucose_mg_dl, 0), 40, 1000);
-      nextState.bmi = clamp(toNumber(nextState.bmi, DEFAULT_STATE.bmi), 10, 80);
-      nextState.has_obesity = nextState.bmi >= 30;
+      nextState.fasting_glucose_mg_dl = normalizeOptionalNumber(nextState.fasting_glucose_mg_dl, { min: 40, max: 700 });
+      nextState.postprandial_glucose_mg_dl = normalizeOptionalNumber(nextState.postprandial_glucose_mg_dl, { min: 40, max: 700 });
+      nextState.egfr_ml_min_1_73m2 = normalizeOptionalNumber(nextState.egfr_ml_min_1_73m2, { min: 1, max: 180 });
+      nextState.bmi = normalizeOptionalNumber(nextState.bmi, { min: 10, max: 80 });
+      nextState.has_obesity = Number.isFinite(nextState.bmi) && nextState.bmi >= 30;
 
       if (nextState.liver_condition === "MASH") {
         nextState.has_MASH = true;
@@ -1581,14 +1678,25 @@
 
     function renderApplication(state) {
       const currentQuestion = getCurrentQuestion(state);
-      const result = recommendTherapy(state);
+      const result = renderRecommendationSurface(state);
+      renderFlowchart(state, result, currentQuestion);
+      renderWizard(state, result, currentQuestion);
+      renderPatientDataEditor(state);
+      queueCenteredActiveStep();
+    }
+
+    function renderRecommendationSurface(state) {
+      const missingRequiredInputs = getRequiredMissingInputs(state, activeEhrProfile);
+      const result = missingRequiredInputs.length
+        ? createMissingDataResult(missingRequiredInputs)
+        : recommendTherapy(state);
       latestState = { ...state };
       latestResult = result;
       renderResultAccessState(isResultsUnlocked(state));
-      renderFlowchart(state, result, currentQuestion);
-      renderWizard(state, result, currentQuestion);
       updateCounts(result);
       renderStatus(result);
+      renderMissingDataPrompt(result);
+      renderMedicationVisibility(result);
       renderLane("preferred", result.preferred_classes, dom.preferredGrid, state);
       renderLane("acceptable", result.acceptable_classes, dom.acceptableGrid, state);
       renderLane("avoid", result.avoid_classes, dom.avoidGrid, state);
@@ -1596,10 +1704,14 @@
       renderFlags(result);
       renderClinicalInsights(result, state);
       renderDataQuality(activeEhrProfile);
-      renderPatientEvidence(state, activeEhrProfile);
-      buildCompareSelectors(result, state);
-      renderCompareCards(result, state);
-      queueCenteredActiveStep();
+      renderPatientEvidence(state, activeEhrProfile, result);
+      if (result.status === "blocked") {
+        clearCompareSurface();
+      } else {
+        buildCompareSelectors(result, state);
+        renderCompareCards(result, state);
+      }
+      return result;
     }
 
     function renderWizard(state, result, currentQuestion) {
@@ -2327,12 +2439,35 @@
       dom.avoidCount.textContent = result.avoid_classes.length;
     }
 
+    function getRequiredMissingInputs(state) {
+      return REQUIRED_EHR_INPUTS.filter((requirement) => !requirement.isComplete(state));
+    }
+
+    function createMissingDataResult(missingRequiredInputs) {
+      const fieldList = joinLabels(missingRequiredInputs.map((item) => item.title));
+      return {
+        status: "blocked",
+        message: `Enter the required EHR information first: ${fieldList}. Medication recommendations are hidden until these values are provided.`,
+        preferred_classes: [],
+        acceptable_classes: [],
+        avoid_classes: [],
+        rationale: [],
+        derived_flags: {
+          missing_required_data: true
+        },
+        missing_required_inputs: missingRequiredInputs
+      };
+    }
+
     function renderStatus(result) {
       let tone = "ok";
       let title = "Recommendation ready";
       let message = result.message;
 
-      if (result.status === "redirect") {
+      if (result.status === "blocked") {
+        tone = "danger";
+        title = "Required EHR data needed";
+      } else if (result.status === "redirect") {
         tone = "warning";
         title = "Out of scope";
       } else if (result.status === "error") {
@@ -2353,6 +2488,46 @@
         <strong>${title}</strong>
         <p>${message}</p>
       `;
+    }
+
+    function renderMissingDataPrompt(result) {
+      if (!dom.missingDataPrompt) {
+        return;
+      }
+
+      const missing = result.missing_required_inputs || [];
+      if (result.status !== "blocked" || !missing.length) {
+        dom.missingDataPrompt.hidden = true;
+        dom.missingDataPrompt.innerHTML = "";
+        return;
+      }
+
+      dom.missingDataPrompt.hidden = false;
+      dom.missingDataPrompt.innerHTML = `
+        <strong>Complete required EHR fields</strong>
+        <p>The algorithm is paused because required patient data is missing or invalid. Enter these values in the EHR Patient Data Board to generate medication recommendations.</p>
+        <ul>
+          ${missing.map((item) => `<li><span>${escapeHtml(item.title)}</span>${escapeHtml(item.prompt)}</li>`).join("")}
+        </ul>
+      `;
+    }
+
+    function renderMedicationVisibility(result) {
+      const blocked = result.status === "blocked";
+      if (dom.stackBoard) {
+        dom.stackBoard.hidden = blocked;
+      }
+      if (dom.compareShell) {
+        dom.compareShell.hidden = blocked;
+      }
+    }
+
+    function clearCompareSurface() {
+      compareState = { left: "", right: "" };
+      if (dom.compareLeft) dom.compareLeft.innerHTML = "";
+      if (dom.compareRight) dom.compareRight.innerHTML = "";
+      if (dom.compareLeftCard) dom.compareLeftCard.innerHTML = "";
+      if (dom.compareRightCard) dom.compareRightCard.innerHTML = "";
     }
 
     function renderLane(lane, classIds, container, state) {
@@ -2502,8 +2677,10 @@
       `;
     }
 
-    function renderPatientEvidence(state, profile) {
-      const evidence = buildPatientEvidence(state, profile.raw);
+    function renderPatientEvidence(state, profile, result = latestResult) {
+      const evidence = buildPatientEvidence(state, profile.raw, {
+        hideMedicationDetails: result?.status === "blocked"
+      });
 
       dom.patientEvidenceGrid.innerHTML = evidence.map((item) => `
         <div class="patient-evidence-item">
@@ -2511,6 +2688,237 @@
           ${escapeHtml(item.value)}
         </div>
       `).join("");
+    }
+
+    function renderPatientDataEditor(state) {
+      if (!dom.patientDataEditor) {
+        return;
+      }
+
+      const missingRequiredFields = new Set(getRequiredMissingInputs(state).map((item) => item.field));
+      const editorSections = [
+        {
+          title: "Demographics and Diagnosis",
+          fields: [
+            { id: "patient_age_years", type: "number", label: "Age", min: 19, max: 99, step: 1, suffix: "years" },
+            {
+              id: "patient_sex",
+              type: "select",
+              label: "Sex",
+              options: [
+                { value: "unknown", label: "Unknown" },
+                { value: "female", label: "Female" },
+                { value: "male", label: "Male" },
+                { value: "other", label: "Other" }
+              ]
+            },
+            { id: "diabetes_type_T1DM", type: "checkbox", label: "Patient has type 1 diabetes mellitus" },
+            { id: "diabetes_type_T2DM", type: "checkbox", label: "Patient has type 2 diabetes mellitus" },
+            { id: "diabetes_type_gestational", type: "checkbox", label: "Patient has gestational diabetes" },
+            { id: "diabetes_type_other", type: "checkbox", label: "Patient has another form of diabetes" },
+            { id: "is_pregnant_or_planning", type: "checkbox", label: "Patient is pregnant or planning pregnancy", full: true }
+          ]
+        },
+        {
+          title: "Glycemia",
+          fields: [
+            { id: "a1c_current_percent", type: "number", label: "Current hemoglobin A1C", min: 4, max: 18, step: 0.1, suffix: "%" },
+            { id: "a1c_target_percent", type: "number", label: "Hemoglobin A1C target", min: 5.7, max: 10, step: 0.1, suffix: "%" },
+            { id: "no_a1c_goal", type: "checkbox", label: "No individualized A1C goal documented" },
+            { id: "fasting_glucose_mg_dl", type: "number", label: "Fasting glucose", min: 40, max: 700, step: 1, suffix: "mg/dL" },
+            { id: "postprandial_glucose_mg_dl", type: "number", label: "Postprandial glucose", min: 40, max: 700, step: 1, suffix: "mg/dL" },
+            { id: "symptomatic_hyperglycemia", type: "checkbox", label: "Symptoms of hyperglycemia are present" },
+            { id: "catabolic_features_present", type: "checkbox", label: "Catabolic features are present" }
+          ]
+        },
+        {
+          title: "Cardiorenal",
+          fields: [
+            { id: "has_ASCVD_or_high_risk", type: "checkbox", label: "Established ASCVD or high cardiovascular risk is present", full: true },
+            { id: "has_HF", type: "checkbox", label: "Heart failure is present" },
+            {
+              id: "HF_type",
+              type: "select",
+              label: "Heart failure type",
+              options: [
+                { value: "NA", label: "Not specified" },
+                { value: "HFpEF", label: "HFpEF: preserved ejection fraction" },
+                { value: "HFrEF", label: "HFrEF: reduced ejection fraction" },
+                { value: "other", label: "Other / mixed" }
+              ]
+            },
+            { id: "HF_symptomatic", type: "checkbox", label: "Heart failure symptoms are present" },
+            { id: "egfr_ml_min_1_73m2", type: "number", label: "Estimated glomerular filtration rate", min: 1, max: 180, step: 1, suffix: "mL/min/1.73 m2" },
+            { id: "albuminuria_present", type: "checkbox", label: "Albuminuria is present" }
+          ]
+        },
+        {
+          title: "Weight, Safety, and Current Therapy",
+          fields: [
+            { id: "bmi", type: "number", label: "Body mass index", min: 10, max: 80, step: 0.1 },
+            { id: "weight_kg", type: "number", label: "Weight", min: 20, max: 400, step: 0.1, suffix: "kg" },
+            { id: "weight_loss_goal_priority", type: "checkbox", label: "Weight loss is a treatment goal" },
+            { id: "high_hypoglycemia_risk", type: "checkbox", label: "Patient has high hypoglycemia risk" },
+            { id: "prioritize_hypoglycemia_avoidance", type: "checkbox", label: "Prioritize avoiding hypoglycemia" },
+            { id: "prefers_oral_only", type: "checkbox", label: "Patient prefers oral medications only" },
+            { id: "cost_barrier_present", type: "checkbox", label: "Cost or access barrier is present" },
+            { id: "on_metformin", type: "checkbox", label: "Currently taking metformin" },
+            { id: "on_SGLT2i", type: "checkbox", label: "Currently taking an SGLT2 inhibitor" },
+            { id: "on_GLP1_RA", type: "checkbox", label: "Currently taking a GLP-1 receptor agonist" },
+            { id: "on_basal_insulin", type: "checkbox", label: "Currently using basal insulin" }
+          ]
+        }
+      ];
+
+      dom.patientDataEditor.innerHTML = editorSections.map((section) => {
+        const valueFields = section.fields.filter((field) => field.type !== "checkbox");
+        const checkFields = section.fields.filter((field) => field.type === "checkbox");
+        return `
+          <section class="patient-editor-section">
+            <h3>${escapeHtml(section.title)}</h3>
+            ${renderPatientEditorGroup("Entered values", valueFields, state, missingRequiredFields, "patient-editor-value-grid")}
+            ${renderPatientEditorGroup("Selections and flags", checkFields, state, missingRequiredFields, "patient-editor-check-grid")}
+          </section>
+        `;
+      }).join("");
+    }
+
+    function renderPatientEditorGroup(label, fields, state, missingRequiredFields, gridClass) {
+      if (!fields.length) {
+        return "";
+      }
+
+      return `
+        <div class="patient-editor-control-group">
+          <div class="patient-editor-group-label">${escapeHtml(label)}</div>
+          <div class="patient-editor-grid ${gridClass}">
+            ${fields.map((field) => renderPatientDataEditorField(field, state, missingRequiredFields)).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderPatientDataEditorField(field, state, missingRequiredFields = new Set()) {
+      const fieldId = `patient-editor-${field.id}`;
+      const fullClass = field.full ? " is-full" : "";
+      const requiredFieldKey = field.id.startsWith("diabetes_type_") ? "diabetes_type" : field.id;
+      const requiredMissingClass = missingRequiredFields.has(requiredFieldKey) ? " is-required-missing" : "";
+
+      if (field.type === "checkbox") {
+        return `
+          <div
+            class="patient-editor-field patient-editor-check${fullClass}${requiredMissingClass}"
+            role="checkbox"
+            tabindex="0"
+            aria-checked="${state[field.id] ? "true" : "false"}">
+            <input
+              id="${fieldId}"
+              type="checkbox"
+              aria-label="${escapeHtml(field.label)}"
+              data-patient-field="${escapeHtml(field.id)}"
+              ${state[field.id] ? "checked" : ""}>
+            <span>${escapeHtml(field.label)}</span>
+          </div>
+        `;
+      }
+
+      if (field.type === "select") {
+        return `
+          <label class="patient-editor-field${fullClass}${requiredMissingClass}" for="${fieldId}">
+            <span>${escapeHtml(field.label)}</span>
+            <select id="${fieldId}" data-patient-field="${escapeHtml(field.id)}">
+              ${field.options.map((option) => `
+                <option value="${escapeHtml(option.value)}" ${String(state[field.id]) === String(option.value) ? "selected" : ""}>
+                  ${escapeHtml(option.label)}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+        `;
+      }
+
+      const value = state[field.id] === null || state[field.id] === undefined ? "" : state[field.id];
+      return `
+        <label class="patient-editor-field${fullClass}${requiredMissingClass}" for="${fieldId}">
+          <span>${escapeHtml(field.label)}</span>
+          <div class="patient-editor-number">
+            <input
+              id="${fieldId}"
+              type="number"
+              data-patient-field="${escapeHtml(field.id)}"
+              data-patient-value-type="number"
+              value="${escapeHtml(value)}"
+              ${Number.isFinite(field.min) ? `min="${field.min}"` : ""}
+              ${Number.isFinite(field.max) ? `max="${field.max}"` : ""}
+              ${field.step ? `step="${field.step}"` : ""}>
+            ${field.suffix ? `<small>${escapeHtml(field.suffix)}</small>` : ""}
+          </div>
+        </label>
+      `;
+    }
+
+    function applyPatientDataEditorChange(control) {
+      const field = control.dataset.patientField;
+      if (!field) {
+        return;
+      }
+
+      const nextState = { ...latestState };
+      if (control.type === "checkbox") {
+        nextState[field] = control.checked;
+      } else if (control.dataset.patientValueType === "number") {
+        nextState[field] = control.value;
+      } else {
+        nextState[field] = control.value;
+      }
+
+      if (field === "a1c_target_percent") {
+        nextState.no_a1c_goal = false;
+      }
+
+      if (field === "has_ASCVD_or_high_risk") {
+        nextState.has_established_ASCVD = control.checked;
+        nextState.has_indicators_high_CVD_risk = control.checked;
+      }
+
+      if (field === "weight_loss_goal_priority") {
+        nextState.prioritize_weight_loss = control.checked;
+      }
+
+      if (field === "prefers_oral_only" && control.checked) {
+        nextState.willing_to_use_injection = false;
+      } else if (field === "prefers_oral_only" && !control.checked) {
+        nextState.willing_to_use_injection = true;
+      }
+
+      latestState = normalizeState(nextState);
+      pruneWizardSession(latestState);
+      persistState();
+
+      const currentQuestion = getCurrentQuestion(latestState);
+      const result = renderRecommendationSurface(latestState);
+      renderFlowchart(latestState, result, currentQuestion);
+      renderWizard(latestState, result, currentQuestion);
+
+      if (control.type === "checkbox" || control.tagName === "SELECT") {
+        renderPatientDataEditor(latestState);
+      } else {
+        syncPatientEditorRequiredState(latestState);
+      }
+    }
+
+    function syncPatientEditorRequiredState(state) {
+      if (!dom.patientDataEditor) {
+        return;
+      }
+
+      const missingRequiredFields = new Set(getRequiredMissingInputs(state).map((item) => item.field));
+      dom.patientDataEditor.querySelectorAll("[data-patient-field]").forEach((control) => {
+        const fieldId = control.dataset.patientField || "";
+        const fieldKey = fieldId.startsWith("diabetes_type_") ? "diabetes_type" : fieldId;
+        const fieldShell = control.closest(".patient-editor-field");
+        fieldShell?.classList.toggle("is-required-missing", missingRequiredFields.has(fieldKey));
+      });
     }
 
     function buildClinicalInsights(result, state) {
@@ -2551,12 +2959,14 @@
       return insights;
     }
 
-    function buildPatientEvidence(state, data) {
+    function buildPatientEvidence(state, data, options = {}) {
       const labs = data?.labs || {};
       const conditions = data?.conditions || {};
       const heartFailure = conditions.heart_failure || {};
       const ckd = conditions.ckd || {};
-      const currentMedications = data?.medications?.current_drugs?.length
+      const currentMedications = options.hideMedicationDetails
+        ? "Hidden until required EHR data is complete"
+        : data?.medications?.current_drugs?.length
         ? data.medications.current_drugs
             .map((drug) => `${titleCase(drug.name)} ${drug.dose || ""} ${drug.frequency || ""}`.trim())
             .join(", ")
@@ -2566,11 +2976,15 @@
         .filter((option) => state[option.key])
         .map((option) => option.label)
         .join(", ") || "Not documented";
+      const ageLabel = Number.isFinite(Number(state.patient_age_years))
+        ? `${state.patient_age_years} years`
+        : "Age not documented";
+      const bmiLabel = Number.isFinite(Number(state.bmi)) ? `BMI ${state.bmi}` : "BMI not documented";
 
       return [
         {
           label: "Demographics",
-          value: `${state.patient_age_years} years, ${prettifyValue(state.patient_sex)}`
+          value: `${ageLabel}, ${prettifyValue(state.patient_sex)}`
         },
         {
           label: "Diabetes diagnosis",
@@ -2581,8 +2995,12 @@
           value: formatLabEvidence(labs.a1c, "%", state.a1c_current_percent)
         },
         {
-          label: "Random glucose",
-          value: formatLabEvidence(labs.random_glucose, "mg/dL", state.random_glucose_mg_dl)
+          label: "Fasting glucose",
+          value: formatLabEvidence(labs.fasting_glucose, "mg/dL", state.fasting_glucose_mg_dl)
+        },
+        {
+          label: "Postprandial glucose",
+          value: formatLabEvidence(labs.postprandial_glucose, "mg/dL", state.postprandial_glucose_mg_dl)
         },
         {
           label: "ASCVD",
@@ -2606,7 +3024,7 @@
         },
         {
           label: "Weight/BMI",
-          value: `${state.weight_kg ? `${state.weight_kg} kg, ` : ""}BMI ${state.bmi}`
+          value: `${state.weight_kg ? `${state.weight_kg} kg, ` : ""}${bmiLabel}`
         },
         {
           label: "Current therapy",
@@ -3046,6 +3464,38 @@
       }
 
       return null;
+    }
+
+    function normalizeOptionalNumber(value, options = {}) {
+      if (value === undefined || value === null || value === "") {
+        return null;
+      }
+
+      const parsed = options.integer
+        ? Number.parseInt(String(value), 10)
+        : Number(value);
+      if (!Number.isFinite(parsed)) {
+        return null;
+      }
+
+      return clamp(parsed, options.min, options.max);
+    }
+
+    function hasRequiredNumber(value, min, max) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) {
+        return false;
+      }
+
+      if (Number.isFinite(min) && parsed < min) {
+        return false;
+      }
+
+      if (Number.isFinite(max) && parsed > max) {
+        return false;
+      }
+
+      return true;
     }
 
     function getDateAgeInDays(dateString) {

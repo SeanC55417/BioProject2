@@ -1,0 +1,92 @@
+{
+  "patient_id": "TEST-004",
+  "demographics": {
+    "age": 70,
+    "sex": "female"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": false,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": true,
+      "egfr": 24,
+      "albuminuria": true
+    },
+    "masld": false,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": false
+  },
+  "labs": {
+    "a1c": {
+      "value": 8.7,
+      "unit": "%",
+      "date": "2026-04-10"
+    },
+    "random_glucose": {
+      "value": 218,
+      "unit": "mg/dL",
+      "date": "2026-04-27"
+    },
+    "fasting_glucose": {
+      "value": 178,
+      "unit": "mg/dL",
+      "date": "2026-04-27"
+    },
+    "postprandial_glucose": {
+      "value": 244,
+      "unit": "mg/dL",
+      "date": "2026-04-27"
+    },
+    "egfr": {
+      "value": 24,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-10"
+    },
+    "uacr": {
+      "value": 480,
+      "unit": "mg/g",
+      "date": "2026-04-10"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 64,
+    "bmi": 24.8
+  },
+  "medications": {
+    "current_classes": [],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "low",
+    "hypoglycemia_priority": true
+  },
+  "safety": {
+    "high_hypoglycemia_risk": true,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 7.5,
+    "weight_loss_goal": false
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "Advanced CKD with albuminuria.",
+    "expected_signals": [
+      "CKD present",
+      "advanced CKD",
+      "SGLT2 glycemic efficacy reduced at lower eGFR"
+    ]
+  }
+}

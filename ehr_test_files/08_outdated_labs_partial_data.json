@@ -1,0 +1,96 @@
+{
+  "patient_id": "TEST-008",
+  "demographics": {
+    "age": 62,
+    "sex": "female"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": true,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": true,
+      "egfr": 59,
+      "albuminuria": true
+    },
+    "masld": false,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": true
+  },
+  "labs": {
+    "a1c": {
+      "value": 8.8,
+      "unit": "%",
+      "date": "2025-07-15"
+    },
+    "random_glucose": {
+      "value": 234,
+      "unit": "mg/dL",
+      "date": "2026-02-14"
+    },
+    "fasting_glucose": {
+      "value": 171,
+      "unit": "mg/dL",
+      "date": "2026-02-14"
+    },
+    "postprandial_glucose": {
+      "value": 244,
+      "unit": "mg/dL",
+      "date": "2026-02-14"
+    },
+    "egfr": {
+      "value": 59,
+      "unit": "mL/min/1.73m2",
+      "date": "2025-08-01"
+    },
+    "uacr": {
+      "value": 72,
+      "unit": "mg/g",
+      "date": "2024-12-15"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 96,
+    "bmi": 33.1
+  },
+  "medications": {
+    "current_classes": [
+      "metformin"
+    ],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "moderate",
+    "hypoglycemia_priority": false
+  },
+  "safety": {
+    "high_hypoglycemia_risk": false,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 7.0,
+    "weight_loss_goal": true
+  },
+  "meta": {
+    "data_completeness": "partial",
+    "test_case": "Valid values with stale lab dates.",
+    "expected_signals": [
+      "partial data confidence",
+      "outdated A1C",
+      "outdated random glucose",
+      "outdated eGFR",
+      "outdated UACR"
+    ]
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "patient_id": "TEST-001",
+  "demographics": {
+    "age": 68,
+    "sex": "male"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": true,
+    "high_ascvd_risk": true,
+    "heart_failure": {
+      "present": true,
+      "type": "HFpEF",
+      "symptomatic": true
+    },
+    "ckd": {
+      "present": true,
+      "egfr": 38,
+      "albuminuria": true
+    },
+    "masld": true,
+    "mash": true,
+    "high_liver_fibrosis_risk": false,
+    "obesity": true
+  },
+  "labs": {
+    "a1c": {
+      "value": 11.4,
+      "unit": "%",
+      "date": "2026-04-12"
+    },
+    "random_glucose": {
+      "value": 368,
+      "unit": "mg/dL",
+      "date": "2026-04-28"
+    },
+    "fasting_glucose": {
+      "value": 264,
+      "unit": "mg/dL",
+      "date": "2026-04-28"
+    },
+    "postprandial_glucose": {
+      "value": 392,
+      "unit": "mg/dL",
+      "date": "2026-04-28"
+    },
+    "egfr": {
+      "value": 38,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-20"
+    },
+    "uacr": {
+      "value": 280,
+      "unit": "mg/g",
+      "date": "2026-04-20"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": true,
+    "catabolic_features": true
+  },
+  "vitals": {
+    "weight_kg": 109,
+    "bmi": 35.6
+  },
+  "medications": {
+    "current_classes": [
+      "metformin"
+    ],
+    "current_drugs": [
+      {
+        "name": "metformin",
+        "dose": "1000 mg",
+        "frequency": "BID"
+      }
+    ]
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "moderate",
+    "hypoglycemia_priority": true
+  },
+  "safety": {
+    "high_hypoglycemia_risk": true,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 7.0,
+    "weight_loss_goal": true
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "Complete urgent T2DM with cardiorenal disease and metabolic/liver priorities.",
+    "expected_signals": [
+      "urgent insulin branch",
+      "ASCVD/high-risk branch",
+      "HF branch",
+      "CKD branch",
+      "weight or metabolic consideration",
+      "MASH / fibrosis risk"
+    ]
+  }
+}

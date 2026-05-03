@@ -1,0 +1,92 @@
+{
+  "patient_id": "TEST-013",
+  "demographics": {
+    "age": 130,
+    "sex": "other"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": true,
+    "high_ascvd_risk": true,
+    "heart_failure": {
+      "present": true,
+      "type": "HFpEF",
+      "symptomatic": true
+    },
+    "ckd": {
+      "present": true,
+      "egfr": -5,
+      "albuminuria": true
+    },
+    "masld": true,
+    "mash": false,
+    "high_liver_fibrosis_risk": true,
+    "obesity": true
+  },
+  "labs": {
+    "a1c": {
+      "value": 23.7,
+      "unit": "%",
+      "date": "2026-04-30"
+    },
+    "random_glucose": {
+      "value": 1200,
+      "unit": "mg/dL",
+      "date": "2026-04-30"
+    },
+    "fasting_glucose": {
+      "value": 5,
+      "unit": "mg/dL",
+      "date": "2026-04-30"
+    },
+    "postprandial_glucose": {
+      "value": 999,
+      "unit": "mg/dL",
+      "date": "2026-04-30"
+    },
+    "egfr": {
+      "value": -5,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-30"
+    },
+    "uacr": {
+      "value": 5000,
+      "unit": "mg/g",
+      "date": "2026-04-30"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": true,
+    "catabolic_features": true
+  },
+  "vitals": {
+    "weight_kg": 10,
+    "bmi": 120
+  },
+  "medications": {
+    "current_classes": [],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "oral_only",
+    "cost_sensitivity": "high",
+    "hypoglycemia_priority": true
+  },
+  "safety": {
+    "high_hypoglycemia_risk": true,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 4.8,
+    "weight_loss_goal": true
+  },
+  "meta": {
+    "data_completeness": "partial",
+    "test_case": "Out-of-range numeric extremes to expose clamping and validation gaps.",
+    "expected_signals": [
+      "severe hyperglycemia",
+      "advanced CKD",
+      "extreme values visible for validation testing"
+    ]
+  }
+}

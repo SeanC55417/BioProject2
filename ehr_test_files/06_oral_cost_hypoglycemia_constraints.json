@@ -1,0 +1,92 @@
+{
+  "patient_id": "TEST-006",
+  "demographics": {
+    "age": 80,
+    "sex": "male"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": false,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": false,
+      "egfr": 78,
+      "albuminuria": false
+    },
+    "masld": false,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": false
+  },
+  "labs": {
+    "a1c": {
+      "value": 8.4,
+      "unit": "%",
+      "date": "2026-04-14"
+    },
+    "random_glucose": {
+      "value": 202,
+      "unit": "mg/dL",
+      "date": "2026-04-24"
+    },
+    "fasting_glucose": {
+      "value": 160,
+      "unit": "mg/dL",
+      "date": "2026-04-24"
+    },
+    "postprandial_glucose": {
+      "value": 226,
+      "unit": "mg/dL",
+      "date": "2026-04-24"
+    },
+    "egfr": {
+      "value": 78,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-14"
+    },
+    "uacr": {
+      "value": 14,
+      "unit": "mg/g",
+      "date": "2026-04-14"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 74,
+    "bmi": 28.4
+  },
+  "medications": {
+    "current_classes": [],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "oral_only",
+    "cost_sensitivity": "high",
+    "hypoglycemia_priority": true
+  },
+  "safety": {
+    "high_hypoglycemia_risk": true,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 7.5,
+    "weight_loss_goal": false
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "Oral-only preference, cost barrier, and hypoglycemia avoidance.",
+    "expected_signals": [
+      "oral-only preference",
+      "cost barrier present",
+      "hypoglycemia avoidance prioritized"
+    ]
+  }
+}

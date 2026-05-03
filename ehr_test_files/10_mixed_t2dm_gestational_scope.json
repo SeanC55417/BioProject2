@@ -1,0 +1,96 @@
+{
+  "patient_id": "TEST-010",
+  "demographics": {
+    "age": 32,
+    "sex": "female"
+  },
+  "conditions": {
+    "diabetes_type": [
+      "T2DM",
+      "gestational diabetes"
+    ],
+    "gestational_diabetes": true,
+    "pregnant_or_planning": true,
+    "ascvd": false,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": false,
+      "egfr": 104,
+      "albuminuria": false
+    },
+    "masld": false,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": true
+  },
+  "labs": {
+    "a1c": {
+      "value": 8.1,
+      "unit": "%",
+      "date": "2026-04-09"
+    },
+    "random_glucose": {
+      "value": 186,
+      "unit": "mg/dL",
+      "date": "2026-04-23"
+    },
+    "fasting_glucose": {
+      "value": 136,
+      "unit": "mg/dL",
+      "date": "2026-04-23"
+    },
+    "postprandial_glucose": {
+      "value": 205,
+      "unit": "mg/dL",
+      "date": "2026-04-23"
+    },
+    "egfr": {
+      "value": 104,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-09"
+    },
+    "uacr": {
+      "value": 9,
+      "unit": "mg/g",
+      "date": "2026-04-09"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 86,
+    "bmi": 31.5
+  },
+  "medications": {
+    "current_classes": [],
+    "current_drugs": []
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "moderate",
+    "hypoglycemia_priority": true
+  },
+  "safety": {
+    "high_hypoglycemia_risk": false,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 6.5,
+    "weight_loss_goal": false
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "T2DM with gestational diabetes also selected.",
+    "expected_signals": [
+      "gestational diabetes scope-development notice",
+      "T2DM recommendations still render because T2DM is included"
+    ]
+  }
+}

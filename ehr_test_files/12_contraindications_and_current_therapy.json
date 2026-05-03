@@ -1,0 +1,116 @@
+{
+  "patient_id": "TEST-012",
+  "demographics": {
+    "age": 63,
+    "sex": "male"
+  },
+  "conditions": {
+    "diabetes_type": "T2DM",
+    "ascvd": false,
+    "high_ascvd_risk": true,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": false,
+      "egfr": 67,
+      "albuminuria": false
+    },
+    "masld": true,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": true
+  },
+  "labs": {
+    "a1c": {
+      "value": 10.6,
+      "unit": "%",
+      "date": "2026-04-11"
+    },
+    "random_glucose": {
+      "value": 289,
+      "unit": "mg/dL",
+      "date": "2026-04-29"
+    },
+    "fasting_glucose": {
+      "value": 219,
+      "unit": "mg/dL",
+      "date": "2026-04-29"
+    },
+    "postprandial_glucose": {
+      "value": 326,
+      "unit": "mg/dL",
+      "date": "2026-04-29"
+    },
+    "egfr": {
+      "value": 67,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-11"
+    },
+    "uacr": {
+      "value": 15,
+      "unit": "mg/g",
+      "date": "2026-04-11"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 104,
+    "bmi": 34.4
+  },
+  "medications": {
+    "current_classes": [
+      "metformin",
+      "SGLT2 inhibitor",
+      "GLP-1 RA"
+    ],
+    "current_drugs": [
+      {
+        "name": "metformin",
+        "dose": "1000 mg",
+        "frequency": "BID"
+      },
+      {
+        "name": "empagliflozin",
+        "dose": "10 mg",
+        "frequency": "daily"
+      },
+      {
+        "name": "semaglutide",
+        "dose": "1 mg",
+        "frequency": "weekly"
+      }
+    ]
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "moderate",
+    "hypoglycemia_priority": false
+  },
+  "safety": {
+    "high_hypoglycemia_risk": false,
+    "contraindications": [
+      "basal insulin",
+      "sulfonylurea",
+      "pioglitazone"
+    ]
+  },
+  "goals": {
+    "a1c_target": 7.0,
+    "weight_loss_goal": true
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "Current therapy plus contraindications under severe glycemic conditions.",
+    "expected_signals": [
+      "current therapies removed from recommendation lanes",
+      "contraindicated classes in Avoid",
+      "severe hyperglycemia rationale remains visible"
+    ]
+  }
+}

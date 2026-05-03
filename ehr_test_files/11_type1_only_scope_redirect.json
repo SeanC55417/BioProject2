@@ -1,0 +1,100 @@
+{
+  "patient_id": "TEST-011",
+  "demographics": {
+    "age": 39,
+    "sex": "female"
+  },
+  "conditions": {
+    "diabetes_type": "Type 1 diabetes mellitus (T1DM)",
+    "t1dm": true,
+    "ascvd": false,
+    "high_ascvd_risk": false,
+    "heart_failure": {
+      "present": false,
+      "type": "",
+      "symptomatic": false
+    },
+    "ckd": {
+      "present": false,
+      "egfr": 94,
+      "albuminuria": false
+    },
+    "masld": false,
+    "mash": false,
+    "high_liver_fibrosis_risk": false,
+    "obesity": false
+  },
+  "labs": {
+    "a1c": {
+      "value": 8.6,
+      "unit": "%",
+      "date": "2026-04-16"
+    },
+    "random_glucose": {
+      "value": 214,
+      "unit": "mg/dL",
+      "date": "2026-04-25"
+    },
+    "fasting_glucose": {
+      "value": 154,
+      "unit": "mg/dL",
+      "date": "2026-04-25"
+    },
+    "postprandial_glucose": {
+      "value": 241,
+      "unit": "mg/dL",
+      "date": "2026-04-25"
+    },
+    "egfr": {
+      "value": 94,
+      "unit": "mL/min/1.73m2",
+      "date": "2026-04-16"
+    },
+    "uacr": {
+      "value": 6,
+      "unit": "mg/g",
+      "date": "2026-04-16"
+    }
+  },
+  "symptoms": {
+    "hyperglycemia_symptoms": false,
+    "catabolic_features": false
+  },
+  "vitals": {
+    "weight_kg": 68,
+    "bmi": 23.9
+  },
+  "medications": {
+    "current_classes": [
+      "basal insulin"
+    ],
+    "current_drugs": [
+      {
+        "name": "insulin glargine",
+        "dose": "18 units",
+        "frequency": "daily"
+      }
+    ]
+  },
+  "preferences": {
+    "route_preference": "open_to_injectable",
+    "cost_sensitivity": "moderate",
+    "hypoglycemia_priority": true
+  },
+  "safety": {
+    "high_hypoglycemia_risk": true,
+    "contraindications": []
+  },
+  "goals": {
+    "a1c_target": 7.0,
+    "weight_loss_goal": false
+  },
+  "meta": {
+    "data_completeness": "complete",
+    "test_case": "Type 1 diabetes only.",
+    "expected_signals": [
+      "current functionality limited to T2DM",
+      "no T2DM recommendation lanes"
+    ]
+  }
+}
