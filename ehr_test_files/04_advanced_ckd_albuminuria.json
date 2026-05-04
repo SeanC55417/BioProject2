@@ -86,7 +86,9 @@
     "expected_signals": [
       "CKD present",
       "advanced CKD",
-      "SGLT2 glycemic efficacy reduced at lower eGFR"
+      "SGLT2 indicated for CKD cardiorenal benefit when eGFR >=20",
+      "SGLT2 glycemic efficacy reduced at lower eGFR",
+      "metformin avoided because eGFR <30"
     ]
   }
 }

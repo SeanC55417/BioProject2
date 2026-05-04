@@ -1,4 +1,51 @@
     const STORAGE_KEY = "ada-2026-simplified-therapy-app-v1";
+    const OPENFDA_LABEL_ENDPOINT = "https://api.fda.gov/drug/label.json";
+    const OPENFDA_LABEL_LIMIT = 1;
+    const OPENFDA_SEARCH_OVERRIDES = {
+      metformin: [
+        { field: "openfda.generic_name.exact", term: "METFORMIN HYDROCHLORIDE" }
+      ],
+      empagliflozin: [
+        { field: "openfda.generic_name.exact", term: "EMPAGLIFLOZIN" }
+      ],
+      dapagliflozin: [
+        { field: "openfda.generic_name.exact", term: "DAPAGLIFLOZIN" }
+      ],
+      semaglutide: [
+        { field: "openfda.generic_name.exact", term: "SEMAGLUTIDE" }
+      ],
+      liraglutide: [
+        { field: "openfda.generic_name.exact", term: "LIRAGLUTIDE" }
+      ],
+      dulaglutide: [
+        { field: "openfda.generic_name.exact", term: "DULAGLUTIDE" }
+      ],
+      tirzepatide: [
+        { field: "openfda.generic_name.exact", term: "TIRZEPATIDE" }
+      ],
+      sitagliptin: [
+        { field: "openfda.generic_name.exact", term: "SITAGLIPTIN" }
+      ],
+      linagliptin: [
+        { field: "openfda.generic_name.exact", term: "LINAGLIPTIN" }
+      ],
+      glipizide: [
+        { field: "openfda.generic_name.exact", term: "GLIPIZIDE" }
+      ],
+      glimepiride: [
+        { field: "openfda.generic_name.exact", term: "GLIMEPIRIDE" }
+      ],
+      pioglitazone: [
+        { field: "openfda.generic_name.exact", term: "PIOGLITAZONE HYDROCHLORIDE" }
+      ],
+      "insulin glargine": [
+        { field: "openfda.generic_name.exact", term: "INSULIN GLARGINE" }
+      ],
+      "nph insulin": [
+        { field: "openfda.brand_name.exact", term: "HUMULIN N" },
+        { field: "openfda.generic_name.exact", term: "INSULIN HUMAN" }
+      ]
+    };
 
     const DRUG_DATA = await loadDrugData().catch((error) => {
       showInitializationError(error);
@@ -832,7 +879,13 @@
       compareShell: document.getElementById("compare-shell"),
       disclaimerModal: document.getElementById("disclaimer-modal"),
       disclaimerDialog: document.querySelector(".disclaimer-dialog"),
-      disclaimerAcknowledgeBtn: document.getElementById("disclaimer-ack-btn")
+      disclaimerAcknowledgeBtn: document.getElementById("disclaimer-ack-btn"),
+      fdaModal: document.getElementById("fda-modal"),
+      fdaDialog: document.querySelector(".fda-dialog"),
+      fdaModalTitle: document.getElementById("fda-modal-title"),
+      fdaModalSubtitle: document.getElementById("fda-modal-subtitle"),
+      fdaModalBody: document.getElementById("fda-modal-body"),
+      fdaModalCloseBtn: document.getElementById("fda-modal-close")
     };
 
     const groupedDrugs = groupDrugsByClass(DRUG_DATA.drugs);
@@ -842,6 +895,8 @@
     let compareState = { left: "", right: "" };
     let latestState = { ...DEFAULT_STATE };
     let latestResult = null;
+    let activeFdaDrugKey = "";
+    const fdaLabelCache = new Map();
     let wizardSession = {
       answeredQuestionIds: [],
       questionHistory: [],
@@ -874,14 +929,37 @@
       dom.backQuestionBtn.addEventListener("click", goToPreviousQuestion);
       dom.advanceQuestionBtn.addEventListener("click", advanceCurrentQuestion);
       dom.disclaimerAcknowledgeBtn?.addEventListener("click", hideDisclaimerModal);
+      dom.fdaModalCloseBtn?.addEventListener("click", hideFdaModal);
+      dom.fdaModal?.addEventListener("click", (event) => {
+        if (event.target.closest("[data-fda-close]")) {
+          hideFdaModal();
+        }
+      });
       dom.questionHistoryList.addEventListener("click", handleQuestionJumpClick);
       dom.flowchartCanvas.addEventListener("click", handleQuestionJumpClick);
       dom.questionHistoryList.addEventListener("keydown", handleQuestionJumpKeydown);
       dom.flowchartCanvas.addEventListener("keydown", handleQuestionJumpKeydown);
 
       document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && isFdaModalOpen()) {
+          hideFdaModal();
+          return;
+        }
+
         if (event.key === "Escape" && isDisclaimerModalOpen()) {
           hideDisclaimerModal();
+        }
+      });
+
+      document.addEventListener("click", (event) => {
+        const fdaButton = event.target.closest("[data-fda-drug-name]");
+        if (!fdaButton) {
+          return;
+        }
+
+        const drug = findDrug(fdaButton.dataset.fdaDrugName);
+        if (drug) {
+          showFdaModal(drug);
         }
       });
 
@@ -1167,6 +1245,100 @@
           dom.pageShell.inert = false;
         }
       }
+    }
+
+    function isFdaModalOpen() {
+      return Boolean(dom.fdaModal?.classList.contains("is-open"));
+    }
+
+    function showFdaModal(drug) {
+      if (!dom.fdaModal || !dom.fdaModalBody) {
+        return;
+      }
+
+      activeFdaDrugKey = getFdaDrugKey(drug);
+      renderFdaModalContent(drug);
+
+      dom.fdaModal.hidden = false;
+      dom.fdaModal.setAttribute("aria-hidden", "false");
+      dom.fdaModal.classList.add("is-open");
+      document.body.classList.add("has-fda-modal-open");
+
+      if (dom.pageShell) {
+        dom.pageShell.setAttribute("aria-hidden", "true");
+        if ("inert" in dom.pageShell) {
+          dom.pageShell.inert = true;
+        }
+      }
+
+      requestAnimationFrame(() => {
+        dom.fdaModalCloseBtn?.focus();
+      });
+
+      loadFdaLabelForDrug(drug).then(() => {
+        if (activeFdaDrugKey === getFdaDrugKey(drug) && isFdaModalOpen()) {
+          renderFdaModalContent(drug);
+        }
+      });
+    }
+
+    function hideFdaModal() {
+      if (!dom.fdaModal) {
+        return;
+      }
+
+      dom.fdaModal.classList.remove("is-open");
+      dom.fdaModal.setAttribute("aria-hidden", "true");
+      dom.fdaModal.hidden = true;
+      document.body.classList.remove("has-fda-modal-open");
+      activeFdaDrugKey = "";
+
+      if (dom.pageShell && !isDisclaimerModalOpen()) {
+        dom.pageShell.removeAttribute("aria-hidden");
+        if ("inert" in dom.pageShell) {
+          dom.pageShell.inert = false;
+        }
+      }
+    }
+
+    function renderFdaModalContent(drug) {
+      const state = fdaLabelCache.get(getFdaDrugKey(drug));
+      const drugTitle = titleCase(drug.drug_name);
+
+      dom.fdaModalTitle.textContent = `${drugTitle} FDA label`;
+      dom.fdaModalSubtitle.textContent = `${CLASS_META[mapDrugClassToId(drug.drug_class)].label} / ${prettifyValue(drug.route)}`;
+
+      if (!state || state.status === "loading") {
+        dom.fdaModalBody.innerHTML = `
+          <div class="fda-modal-state">
+            <strong>Loading FDA label data</strong>
+            <p>Querying openFDA for the most recent matching drug label.</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (state.status === "no_match") {
+        dom.fdaModalBody.innerHTML = `
+          <div class="fda-modal-state">
+            <strong>No FDA label match found</strong>
+            <p>openFDA did not return a matching label for ${escapeHtml(drugTitle)}. The local medication catalog remains visible in the recommendation card.</p>
+          </div>
+        `;
+        return;
+      }
+
+      if (state.status === "error") {
+        dom.fdaModalBody.innerHTML = `
+          <div class="fda-modal-state">
+            <strong>FDA label data unavailable</strong>
+            <p>${escapeHtml(state.message || "The openFDA request could not be completed.")}</p>
+          </div>
+        `;
+        return;
+      }
+
+      dom.fdaModalBody.innerHTML = renderFdaModalReady(drug, state.label);
     }
 
     function hydrateSession(savedSession) {
@@ -2157,21 +2329,32 @@
       const severe_hyperglycemia =
         Boolean(inputs.symptomatic_hyperglycemia) ||
         Boolean(inputs.catabolic_features_present) ||
-        inputs.a1c_current_percent > 10.0;
+        inputs.a1c_current_percent > 10.0 ||
+        (Number.isFinite(inputs.random_glucose_mg_dl) && inputs.random_glucose_mg_dl >= 300);
+
+      const egfr = Number.isFinite(inputs.egfr_ml_min_1_73m2)
+        ? inputs.egfr_ml_min_1_73m2
+        : null;
 
       const has_cardiorenal_driver =
         Boolean(inputs.has_established_ASCVD) ||
         Boolean(inputs.has_indicators_high_CVD_risk) ||
         Boolean(inputs.has_HF) ||
-        inputs.egfr_ml_min_1_73m2 < 60 ||
+        (egfr !== null && egfr < 60) ||
         Boolean(inputs.albuminuria_present);
 
-      const has_CKD = inputs.egfr_ml_min_1_73m2 < 60 || Boolean(inputs.albuminuria_present);
-      const advanced_CKD = inputs.egfr_ml_min_1_73m2 < 30;
-      const SGLT2_low_glycemic_effect = inputs.egfr_ml_min_1_73m2 < 45;
+      const has_CKD = (egfr !== null && egfr < 60) || Boolean(inputs.albuminuria_present);
+      const advanced_CKD = egfr !== null && egfr < 30;
+      const SGLT2_low_glycemic_effect = egfr !== null && egfr < 45;
+      const SGLT2_ckd_initiation_eligible = egfr === null || egfr >= 20;
+      const metformin_egfr_contraindicated = egfr !== null && egfr < 30;
 
-      if (inputs.metformin_contraindicated) {
+      if (inputs.metformin_contraindicated || metformin_egfr_contraindicated) {
         addUnique(avoid_classes, "metformin");
+      }
+
+      if (metformin_egfr_contraindicated) {
+        addUnique(rationale, "metformin avoided because eGFR <30");
       }
 
       if (inputs.SGLT2i_contraindicated) {
@@ -2252,18 +2435,14 @@
       if (has_CKD) {
         addUnique(rationale, "CKD present");
 
-        if (advanced_CKD) {
-          if (!inputs.on_GLP1_RA) {
-            addUnique(preferred_classes, "GLP1_RA");
-          }
-        } else {
-          if (!inputs.on_SGLT2i) {
-            addUnique(preferred_classes, "SGLT2i");
-          }
+        if (!inputs.on_SGLT2i && SGLT2_ckd_initiation_eligible) {
+          addUnique(preferred_classes, "SGLT2i");
+        } else if (egfr !== null && egfr < 20) {
+          addUnique(rationale, "SGLT2 initiation below eGFR 20 needs manual review");
+        }
 
-          if (!inputs.on_GLP1_RA) {
-            addUnique(acceptable_classes, "GLP1_RA");
-          }
+        if (!inputs.on_GLP1_RA) {
+          addUnique(acceptable_classes, "GLP1_RA");
         }
       }
 
@@ -2396,7 +2575,8 @@
       }
 
       if (advanced_CKD) {
-        moveDownIfPresent("metformin", preferred_classes, acceptable_classes);
+        removeIfPresent("metformin", preferred_classes);
+        removeIfPresent("metformin", acceptable_classes);
       }
 
       const currentClasses = [];
@@ -2423,16 +2603,17 @@
       });
 
       if (preferred.length === 0 && acceptable.length === 0) {
-        if (!inputs.on_metformin) {
+        if (!inputs.on_metformin && !avoid.includes("metformin")) {
           preferred.push("metformin");
-        } else if (!inputs.on_SGLT2i) {
+        } else if (!inputs.on_SGLT2i && !avoid.includes("SGLT2i")) {
           preferred.push("SGLT2i");
-        } else if (!inputs.on_GLP1_RA && !inputs.prefers_oral_only) {
+        } else if (!inputs.on_GLP1_RA && !inputs.prefers_oral_only && !avoid.includes("GLP1_RA")) {
           preferred.push("GLP1_RA");
         } else if ((inputs.cost_barrier_present || inputs.prefers_oral_only) &&
                    !inputs.on_sulfonylurea &&
                    !inputs.high_hypoglycemia_risk &&
-                   !inputs.prioritize_hypoglycemia_avoidance) {
+                   !inputs.prioritize_hypoglycemia_avoidance &&
+                   !avoid.includes("sulfonylurea")) {
           acceptable.push("sulfonylurea");
         } else {
           addUnique(rationale, "needs manual clinical review");
@@ -2448,6 +2629,8 @@
         has_CKD,
         advanced_CKD,
         SGLT2_low_glycemic_effect,
+        SGLT2_ckd_initiation_eligible,
+        metformin_egfr_contraindicated,
         marked_random_glucose_elevation: Number.isFinite(inputs.random_glucose_mg_dl) && inputs.random_glucose_mg_dl >= 300,
         marked_fasting_glucose_elevation: inputs.fasting_glucose_mg_dl >= 250,
         marked_postprandial_glucose_elevation: inputs.postprandial_glucose_mg_dl >= 300,
@@ -2612,7 +2795,10 @@
               return `
                 <li>
                   <span>${titleCase(drug.drug_name)}</span>
-                  <small>${conflicts.length ? "Profile conflict" : "Available example"}</small>
+                  <div class="drug-row-actions">
+                    <small>${conflicts.length ? "Profile conflict" : "Available example"}</small>
+                    ${renderFdaLabelButton(drug)}
+                  </div>
                 </li>
               `;
             }).join("")}
@@ -2650,6 +2836,7 @@
       if (derived.has_CKD) flags.push("CKD present");
       if (derived.advanced_CKD) flags.push("Advanced CKD");
       if (derived.SGLT2_low_glycemic_effect) flags.push("Reduced glycemic effect for SGLT2 at this eGFR");
+      if (derived.metformin_egfr_contraindicated) flags.push("Metformin avoided at eGFR <30");
 
       dom.flagRow.innerHTML = flags.length
         ? flags.map((item) => `<span class="pill neutral">${item}</span>`).join("")
@@ -3076,6 +3263,7 @@
       if (classId === "SGLT2i") {
         if (state.has_HF) details.push(`Heart failure is documented${state.HF_type !== "NA" ? ` (${state.HF_type})` : ""}.`);
         if (derived.has_CKD) details.push(`CKD/albuminuria branch is active with eGFR ${state.egfr_ml_min_1_73m2}.`);
+        if (derived.SGLT2_low_glycemic_effect) details.push("Glycemic effect may be reduced, but CKD cardiorenal benefit still drives the recommendation.");
         if (state.has_ASCVD_or_high_risk) details.push("ASCVD/high cardiovascular risk is present.");
       }
 
@@ -3095,8 +3283,12 @@
       }
 
       if (classId === "metformin") {
-        if (derived.above_a1c_goal) details.push(`A1C ${state.a1c_current_percent}% remains above target.`);
-        details.push("Foundational oral therapy remains available unless already used or contraindicated.");
+        if (derived.metformin_egfr_contraindicated) {
+          details.push(`eGFR ${state.egfr_ml_min_1_73m2} is below 30, meeting the metformin contraindication cutoff.`);
+        } else {
+          if (derived.above_a1c_goal) details.push(`A1C ${state.a1c_current_percent}% remains above target.`);
+          details.push("Foundational oral therapy remains available unless already used or contraindicated.");
+        }
       }
 
       if (classId === "pioglitazone") {
@@ -3117,6 +3309,248 @@
       }
 
       return details.slice(0, 2).join(" ");
+    }
+
+    function loadFdaLabelForDrug(drug) {
+      const key = getFdaDrugKey(drug);
+      const cached = fdaLabelCache.get(key);
+
+      if (cached?.status === "loading") {
+        return cached.promise;
+      }
+
+      if (cached?.status === "ready" || cached?.status === "no_match" || cached?.status === "error") {
+        return Promise.resolve(cached);
+      }
+
+      const loadingState = {
+        status: "loading",
+        requestedAt: Date.now()
+      };
+      fdaLabelCache.set(key, loadingState);
+
+      loadingState.promise = fetchOpenFdaLabel(drug)
+        .then((label) => {
+          const nextState = label
+            ? { status: "ready", label, receivedAt: Date.now() }
+            : { status: "no_match", receivedAt: Date.now() };
+          fdaLabelCache.set(key, nextState);
+          return nextState;
+        })
+        .catch((error) => {
+          const nextState = {
+            status: "error",
+            message: error.message || "FDA label lookup failed.",
+            receivedAt: Date.now()
+          };
+          fdaLabelCache.set(key, nextState);
+          return nextState;
+        });
+
+      return loadingState.promise;
+    }
+
+    async function fetchOpenFdaLabel(drug) {
+      const candidates = getOpenFdaSearchCandidates(drug);
+
+      for (const candidate of candidates) {
+        const url = buildOpenFdaLabelUrl(candidate);
+        const response = await fetch(url);
+
+        if (response.status === 404) {
+          continue;
+        }
+
+        if (!response.ok) {
+          throw new Error(`openFDA label request failed: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const result = payload?.results?.[0];
+
+        if (result) {
+          return normalizeOpenFdaLabel(result, payload.meta, candidate, url);
+        }
+      }
+
+      return null;
+    }
+
+    function renderFdaLabelButton(drug) {
+      const state = fdaLabelCache.get(getFdaDrugKey(drug));
+      const statusText = state?.status === "ready" ? "FDA label" : "FDA";
+
+      return `
+        <button class="fda-label-btn" type="button" data-fda-drug-name="${escapeHtml(drug.drug_name)}">
+          ${statusText}
+        </button>
+      `;
+    }
+
+    function renderFdaModalReady(drug, label) {
+      const sections = [
+        { title: "Indications", text: label.indications },
+        { title: "Warnings", text: label.warnings || label.boxedWarning, urgent: Boolean(label.boxedWarning) },
+        { title: "Contraindications", text: label.contraindications },
+        { title: "Drug interactions", text: label.drugInteractions }
+      ].filter((section) => section.text);
+      const updatedLabel = formatOpenFdaDate(label.effectiveTime);
+      const apiUpdatedLabel = formatOpenFdaDate(label.metaLastUpdated);
+
+      return `
+        <div class="fda-label-body">
+          <div class="fda-label-meta">
+            <span><strong>Product</strong>${escapeHtml(label.brandName || titleCase(drug.drug_name))}</span>
+            <span><strong>Generic</strong>${escapeHtml(label.genericName || titleCase(drug.drug_name))}</span>
+            ${label.route ? `<span><strong>Route</strong>${escapeHtml(label.route)}</span>` : ""}
+            ${label.manufacturer ? `<span><strong>Manufacturer</strong>${escapeHtml(label.manufacturer)}</span>` : ""}
+            <span><strong>Label effective</strong>${escapeHtml(updatedLabel)}</span>
+            <span><strong>API updated</strong>${escapeHtml(apiUpdatedLabel)}</span>
+          </div>
+          ${sections.length
+            ? sections.map((section) => `
+                <div class="fda-label-section ${section.urgent ? "is-warning" : ""}">
+                  <strong>${escapeHtml(section.title)}</strong>
+                  <p>${escapeHtml(section.text)}</p>
+                </div>
+              `).join("")
+            : `<p class="fda-label-note">FDA returned a label record, but common summary sections were not available.</p>`}
+          <a href="${escapeHtml(label.sourceUrl)}" target="_blank" rel="noopener noreferrer">Open openFDA JSON</a>
+        </div>
+      `;
+    }
+
+    function normalizeOpenFdaLabel(result, meta, candidate, sourceUrl) {
+      const openfda = result.openfda || {};
+
+      return {
+        brandName: firstListValue(openfda.brand_name),
+        genericName: firstListValue(openfda.generic_name),
+        manufacturer: firstListValue(openfda.manufacturer_name),
+        route: summariseValueList(openfda.route || []),
+        productType: firstListValue(openfda.product_type),
+        effectiveTime: result.effective_time,
+        metaLastUpdated: meta?.last_updated,
+        matchedBy: `${candidate.field}: ${candidate.term}`,
+        sourceUrl: getPublicOpenFdaUrl(sourceUrl),
+        boxedWarning: getOpenFdaSectionText(result, ["boxed_warning"], 280),
+        indications: getOpenFdaSectionText(result, ["indications_and_usage", "purpose"], 280),
+        warnings: getOpenFdaSectionText(result, ["warnings_and_cautions", "warnings", "boxed_warning"], 280),
+        contraindications: getOpenFdaSectionText(result, ["contraindications"], 260),
+        drugInteractions: getOpenFdaSectionText(result, ["drug_interactions"], 260)
+      };
+    }
+
+    function getOpenFdaSearchCandidates(drug) {
+      const key = getFdaDrugKey(drug);
+      const fallbackTerm = String(drug.drug_name || "").trim().toUpperCase();
+      const candidates = [
+        ...(OPENFDA_SEARCH_OVERRIDES[key] || []),
+        { field: "openfda.generic_name", term: fallbackTerm },
+        { field: "openfda.brand_name", term: fallbackTerm }
+      ];
+      const seen = new Set();
+
+      return candidates.filter((candidate) => {
+        const signature = `${candidate.field}:${candidate.term}`;
+        if (!candidate.term || seen.has(signature)) {
+          return false;
+        }
+        seen.add(signature);
+        return true;
+      });
+    }
+
+    function buildOpenFdaLabelUrl(candidate) {
+      const url = new URL(OPENFDA_LABEL_ENDPOINT);
+      url.searchParams.set("search", `${candidate.field}:"${escapeOpenFdaTerm(candidate.term)}"`);
+      url.searchParams.set("sort", "effective_time:desc");
+      url.searchParams.set("limit", String(OPENFDA_LABEL_LIMIT));
+
+      const apiKey = getOpenFdaApiKey();
+      if (apiKey) {
+        url.searchParams.set("api_key", apiKey);
+      }
+
+      return url.toString();
+    }
+
+    function getOpenFdaApiKey() {
+      try {
+        return window.OPENFDA_API_KEY || localStorage.getItem("openfda_api_key") || "";
+      } catch (error) {
+        return window.OPENFDA_API_KEY || "";
+      }
+    }
+
+    function getOpenFdaSectionText(result, fieldNames, maxLength) {
+      for (const fieldName of fieldNames) {
+        const text = cleanOpenFdaText(firstListValue(result[fieldName]));
+        if (text) {
+          return truncateText(text, maxLength);
+        }
+      }
+
+      return "";
+    }
+
+    function firstListValue(value) {
+      if (Array.isArray(value)) {
+        return value.find((item) => item !== undefined && item !== null && String(item).trim()) || "";
+      }
+
+      return value === undefined || value === null ? "" : value;
+    }
+
+    function cleanOpenFdaText(value) {
+      return String(value || "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function truncateText(value, maxLength = 260) {
+      const text = String(value || "").trim();
+
+      if (text.length <= maxLength) {
+        return text;
+      }
+
+      const clipped = text.slice(0, maxLength);
+      const lastSpace = clipped.lastIndexOf(" ");
+      return `${clipped.slice(0, lastSpace > 120 ? lastSpace : maxLength).trim()}...`;
+    }
+
+    function formatOpenFdaDate(value) {
+      if (!value) {
+        return "date unavailable";
+      }
+
+      const compactMatch = String(value).match(/^(\d{4})(\d{2})(\d{2})$/);
+      if (compactMatch) {
+        const [, year, month, day] = compactMatch;
+        return formatIsoDate(`${year}-${month}-${day}`);
+      }
+
+      return formatIsoDate(value);
+    }
+
+    function getPublicOpenFdaUrl(value) {
+      try {
+        const url = new URL(value);
+        url.searchParams.delete("api_key");
+        return url.toString();
+      } catch (error) {
+        return OPENFDA_LABEL_ENDPOINT;
+      }
+    }
+
+    function escapeOpenFdaTerm(value) {
+      return String(value || "").replaceAll("\"", "\\\"");
+    }
+
+    function getFdaDrugKey(drug) {
+      return String(drug?.drug_name || "").trim().toLowerCase();
     }
 
     function buildCompareSelectors(result, state) {
@@ -3212,6 +3646,7 @@
           <div class="chip-row">
             <span class="pill ${lane}">${laneLabel}</span>
             ${conflicts.length ? `<span class="pill avoid">Profile conflict</span>` : `<span class="pill neutral">No direct conflict detected</span>`}
+            ${renderFdaLabelButton(drug)}
           </div>
         </header>
 
@@ -3301,8 +3736,11 @@
     }
 
     function getDrugConflicts(drug, state) {
+      const metforminEgfrContraindicated =
+        Number.isFinite(state.egfr_ml_min_1_73m2) && state.egfr_ml_min_1_73m2 < 30;
+
       const profileFlags = {
-        metformin_contraindicated: state.metformin_contraindicated,
+        metformin_contraindicated: state.metformin_contraindicated || metforminEgfrContraindicated,
         metformin_intolerance: false,
         sglt2i_contraindicated: state.SGLT2i_contraindicated,
         sglt2i_intolerance: false,
@@ -3326,7 +3764,13 @@
 
       return (drug.key_exclusion_conditions || [])
         .filter((flag) => profileFlags[flag])
-        .map(humaniseConflict);
+        .map((flag) => {
+          if (flag === "metformin_contraindicated" && metforminEgfrContraindicated) {
+            return `eGFR ${state.egfr_ml_min_1_73m2} is below 30; metformin is contraindicated.`;
+          }
+
+          return humaniseConflict(flag);
+        });
     }
 
     function humaniseConflict(flag) {

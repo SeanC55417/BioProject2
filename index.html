@@ -22,6 +22,21 @@
     </section>
   </div>
 
+  <div class="fda-modal" id="fda-modal" aria-hidden="true" hidden>
+    <div class="fda-modal-backdrop" data-fda-close></div>
+    <section class="fda-dialog" role="dialog" aria-modal="true" aria-labelledby="fda-modal-title" aria-describedby="fda-modal-subtitle">
+      <header class="fda-dialog-header">
+        <div>
+          <span class="fda-kicker">FDA Label Data</span>
+          <h2 id="fda-modal-title">Drug label</h2>
+          <p id="fda-modal-subtitle">Loading openFDA data...</p>
+        </div>
+        <button class="fda-close-btn" id="fda-modal-close" type="button" aria-label="Close FDA label popup">×</button>
+      </header>
+      <div class="fda-dialog-body" id="fda-modal-body"></div>
+    </section>
+  </div>
+
   <main class="page-shell">
     <section class="hero">
       <div class="hero-grid">
